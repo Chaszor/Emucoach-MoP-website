@@ -1,0 +1,304 @@
+<?php
+/**
+ * Shop page — mysqli + SOAP delivery + categories (Approach B)
+ * No ID column in the table output.
+ */
+
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/header.php';
+
+if (empty($_SESSION['username'])) {
+    echo "<div class='flash err'>You must be logged in to access the shop.</div>";
+    require_once __DIR__ . '/../includes/footer.php';
+    exit;
+}
+
+/* ----------------------------- Helpers ----------------------------------- */
+
+function flash(string $type, string $msg): void {
+    $cls = $type === 'ok' ? 'ok' : 'err';
+    echo "<div class='flash {$cls}'>" . htmlspecialchars($msg) . "</div>";
+}
+
+function log_pay_history(mysqli $auth_conn, string $username, string $orderNo, float $price,
+                         string $status, string $cpparam = '', string $synType = 'SHOP'): void {
+    $stmt = $auth_conn->prepare("
+        INSERT INTO pay_history (orderNo, synType, status, price, time, cpparam, username)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ");
+    if ($stmt) {
+        $now = date('Y-m-d H:i:s');
+        $stmt->bind_param('sssdsis', $orderNo, $synType, $status, $price, $now, $cpparam, $username);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+function get_account(mysqli $auth_conn, string $username): ?array {
+    $stmt = $auth_conn->prepare("SELECT id, username, IFNULL(cash,0) AS cash FROM account WHERE username = ? LIMIT 1");
+    if (!$stmt) return null;
+    $stmt->bind_param('s', $username);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
+}
+
+function user_characters(mysqli $char_conn, int $account_id): array {
+    $stmt = $char_conn->prepare("SELECT guid, name FROM characters WHERE account = ? ORDER BY name ASC");
+    if (!$stmt) return [];
+    $stmt->bind_param('i', $account_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $out = [];
+    while ($r = $res->fetch_assoc()) $out[] = $r;
+    $stmt->close();
+    return $out;
+}
+
+function get_categories(mysqli $db): array {
+    $sql = "SELECT c.id, c.name, COUNT(i.id) AS cnt
+            FROM shop_categories c
+            LEFT JOIN shop_items i ON i.category_id = c.id
+            GROUP BY c.id, c.name
+            ORDER BY c.name";
+    $res = $db->query($sql);
+    $out = [];
+    if ($res) { while ($r = $res->fetch_assoc()) $out[] = $r; $res->close(); }
+    return $out;
+}
+
+function list_shop_items(mysqli $db, ?int $categoryId = null): array {
+    if ($categoryId) {
+        $stmt = $db->prepare("
+            SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id, c.name AS category
+            FROM shop_items i
+            LEFT JOIN shop_categories c ON c.id = i.category_id
+            WHERE i.category_id = ?
+            ORDER BY i.name ASC, i.id ASC
+        ");
+        $stmt->bind_param('i', $categoryId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+    } else {
+        $res = $db->query("
+            SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id, c.name AS category
+            FROM shop_items i
+            LEFT JOIN shop_categories c ON c.id = i.category_id
+            ORDER BY c.name ASC, i.name ASC, i.id ASC
+        ");
+    }
+    $items = [];
+    if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
+    if (isset($stmt)) $stmt->close();
+    return $items;
+}
+
+function get_shop_item_by_id(mysqli $db, int $id): ?array {
+    $stmt = $db->prepare("
+        SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id
+        FROM shop_items i
+        WHERE i.id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) return null;
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
+}
+
+function deliver_item(int $char_guid, string $char_name, int $item_entry, int $count): array {
+    $subject = "Thank you for your purchase";
+    $body    = "Your shop purchase has been delivered.";
+    if (function_exists('sendSoap')) {
+        $cmd = sprintf('send items %s "%s" "%s" %d:%d', $char_name, addslashes($subject), addslashes($body), $item_entry, $count);
+        [$ok, $resp] = sendSoap($cmd);
+        return [$ok, $resp];
+    }
+    if (function_exists('deliverViaDBMail')) {
+        try {
+            deliverViaDBMail($GLOBALS['char_conn'], $char_guid, $item_entry, $count, $subject, $body);
+            return [true, 'Delivered via DB mail'];
+        } catch (Throwable $e) {
+            return [false, 'DB-mail failed: ' . $e->getMessage()];
+        }
+    }
+    return [false, 'No delivery method available (SOAP/DB-mail not configured)'];
+}
+
+/* ----------------------------- Main -------------------------------------- */
+
+$username = $_SESSION['username'];
+$account  = get_account($auth_conn, $username);
+if (!$account) {
+    flash('err', 'Account not found.');
+    require_once __DIR__ . '/../includes/footer.php';
+    exit;
+}
+$account_id = (int)$account['id'];
+$cash       = (float)$account['cash'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
+    $item_id   = (int)($_POST['item_id'] ?? 0);
+    $char_guid = (int)($_POST['char_guid'] ?? 0);
+    if ($item_id && $char_guid) {
+        $item = get_shop_item_by_id($auth_conn, $item_id);
+        if ($item) {
+            $stmt = $char_conn->prepare("SELECT name FROM characters WHERE guid = ? AND account = ? LIMIT 1");
+            $stmt->bind_param('ii', $char_guid, $account_id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res->fetch_assoc();
+            $stmt->close();
+            if ($row) {
+                $char_name = $row['name'];
+                $price     = (float)$item['price'];
+                $entry     = (int)$item['item_entry'];
+                $stack     = max(1, (int)$item['stack']);
+                if ($cash >= $price) {
+                    $auth_conn->begin_transaction();
+                    $ok = true; $msg = '';
+                    $orderNo = 'ORD-' . time() . '-' . random_int(1000, 9999);
+                    $stmt = $auth_conn->prepare("UPDATE account SET cash = cash - ? WHERE id = ? AND cash >= ?");
+                    $stmt->bind_param('dii', $price, $account_id, $price);
+                    $stmt->execute();
+                    if ($stmt->affected_rows !== 1) { $ok = false; $msg = 'Balance update failed.'; }
+                    $stmt->close();
+                    if ($ok) {
+                        [$d_ok, $d_msg] = deliver_item($char_guid, $char_name, $entry, $stack);
+                        if (!$d_ok) { $ok = false; $msg = 'Delivery failed: ' . $d_msg; }
+                    }
+                    if ($ok) {
+                        $auth_conn->commit();
+                        log_pay_history($auth_conn, $username, $orderNo, $price, 'SUCCESS', 'item=' . $entry);
+                        flash('ok', "Delivered {$item['name']} x{$stack} to {$char_name}. Deducted {$price} points.");
+                        $account = get_account($auth_conn, $username);
+                        $cash    = (float)$account['cash'];
+                    } else {
+                        $auth_conn->rollback();
+                        log_pay_history($auth_conn, $username, $orderNo, $price, 'FAILED', $msg);
+                        flash('err', $msg);
+                    }
+                } else {
+                    flash('err', 'Not enough points.');
+                }
+            } else {
+                flash('err', 'Invalid character selection.');
+            }
+        } else {
+            flash('err', 'Item not found.');
+        }
+    } else {
+        flash('err', 'Missing item or character.');
+    }
+}
+
+/* ----------------------------- UI ---------------------------------------- */
+
+$currentCatId = isset($_GET['cat']) ? (int)$_GET['cat'] : 0;
+$cats = get_categories($auth_conn);
+
+$baseUrl = strtok($_SERVER['REQUEST_URI'], '?');
+echo "<div style='margin:10px 0; display:flex; gap:8px; flex-wrap:wrap'>";
+echo "<a href='{$baseUrl}' style='padding:6px 10px; border:1px solid #ccc; border-radius:6px; text-decoration:none;"
+   . ($currentCatId === 0 ? " background:#eef;" : " background:#fff;")
+   . "'>All</a>";
+foreach ($cats as $c) {
+    if ((int)$c['cnt'] === 0) continue;
+    $active = ($currentCatId === (int)$c['id']);
+    $name = htmlspecialchars($c['name']);
+    $cnt  = (int)$c['cnt'];
+    echo "<a href='{$baseUrl}?cat={$c['id']}' "
+       . "style='padding:6px 10px; border:1px solid #ccc; border-radius:6px; text-decoration:none;"
+       . ($active ? " background:#eef;" : " background:#fff;")
+       . "'>{$name} <span style='opacity:.6'>({$cnt})</span></a>";
+}
+echo "</div>";
+
+echo "<div style='margin-bottom:8px'>Points: <b>" . number_format($cash, 2) . "</b></div>";
+
+$items = list_shop_items($auth_conn, $currentCatId ?: null);
+
+if (!$items) {
+    echo "<p>No items configured yet.</p>";
+} else {
+    echo "<table id='shopTable' border='1' cellpadding='6' cellspacing='0' style='margin-top:10px'>";
+    echo "<tr>
+            <th class='sortable'>Item <span class='arrow'></span></th>
+            <th class='sortable'>Price <span class='arrow'></span></th>
+            <th>Stack <span class='arrow'></span></th>
+            <th>To Character</th>
+          </tr>";
+    foreach ($items as $row) {
+        echo "<tr>";
+
+        // NAME
+        echo "  <td>"
+           . "    <a href='https://www.wowhead.com/mop-classic/item=".(int)$row['item_entry']."' rel='wowhead'>"
+           .          htmlspecialchars($row['name'])
+           . "    </a> "
+           . "    <span style='opacity:.6'>(Entry " . (int)$row['item_entry'] . ")</span>"
+           . "  </td>";
+
+        // PRICE & STACK
+        echo "  <td>" . htmlspecialchars((string)$row['price']) . "</td>";
+        echo "  <td>" . (int)$row['stack'] . "</td>";
+
+        // CHARACTER SELECT + Buy
+        echo "  <td>";
+        echo "    <form method='post' style='margin:0; display:flex; gap:6px; align-items:center'>";
+        echo "      <select name='char_guid' required>";
+        $characters = user_characters($char_conn, $account_id);
+        foreach ($characters as $c) {
+            echo "<option value='".(int)$c['guid']."'>".htmlspecialchars($c['name'])."</option>";
+        }
+        echo "      </select>";
+        echo "      <input type='hidden' name='item_id' value='".(int)$row['id']."'>";
+        echo "      <button type='submit' name='buy' value='1'>Buy</button>";
+        echo "    </form>";
+        echo "  </td>";
+
+        echo "</tr>";
+    }
+    echo "</table>";
+}
+?>
+
+<style>
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable .arrow { font-size: 0.8em; opacity: 0.6; }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const getCellValue = (row, index) =>
+    row.children[index].innerText.trim();
+
+  const comparer = (index, asc) => (a, b) => {
+    const v1 = getCellValue(asc ? a : b, index);
+    const v2 = getCellValue(asc ? b : a, index);
+    return !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.localeCompare(v2);
+  };
+
+  document.querySelectorAll("#shopTable th.sortable").forEach((th, idx) =>
+    th.addEventListener("click", () => {
+      const table = th.closest("table");
+      const rows = Array.from(table.querySelectorAll("tr:nth-child(n+2)"));
+      const asc = (th.asc = !th.asc);
+
+      rows.sort(comparer(idx, asc)).forEach(tr => table.appendChild(tr));
+
+      // reset arrows
+      document.querySelectorAll("#shopTable th.sortable .arrow").forEach(el => el.textContent = "");
+      th.querySelector(".arrow").textContent = asc ? "↑" : "↓";
+    })
+  );
+});
+</script>
+
+<?php
+require_once __DIR__ . '/../includes/footer.php';

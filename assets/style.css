@@ -1,0 +1,151 @@
+:root{
+  --bg:#0f172a; --panel:#111827; --muted:#6b7280; --text:#e5e7eb; --brand:#22c55e; --accent:#38bdf8; --border:#1f2937;font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+}
+
+/* Base layout */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+form {
+  background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px;
+}
+
+/* Structure */
+header,
+footer {
+  background: #222; /* fallback */
+  background: linear-gradient(145deg, rgba(34,197,94,.12), rgba(56,189,248,.1));
+  border: 1px solid var(--border);
+  padding: 24px;
+  border-radius: 16px;
+  text-align: center;
+}
+
+main { padding: 20px; }
+
+/* Navigation */
+nav a {
+  margin: 0 15px;
+  color: var(--text);
+  text-decoration: none;
+}
+nav a:hover { color: gold; }
+
+/* Content helpers */
+.wrap { max-width:1100px; margin:0 auto; padding:24px; }
+.hero { background:linear-gradient(145deg,rgba(34,197,94,.12),rgba(56,189,248,.1)); border:1px solid var(--border); padding:24px; border-radius:16px; }
+h1 { margin:0 0 8px; font-size:28px; }
+p.lead { margin:0; color:#cbd5e1; }
+
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:18px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; }
+.card h3 { margin:0 0 6px; font-size:18px; }
+.muted { color:var(--muted); font-size:14px; }
+
+.btn { display:inline-flex; align-items:center; gap:8px; background:var(--brand); color:#052e16; border:none; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; text-decoration:none; }
+.btn.secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+
+code, .mono { font-family: ui-monospace,Menlo,Monaco,Consolas,monospace; }
+
+.steps { counter-reset: step; }
+.steps li { list-style:none; margin:0 0 10px; padding-left:10px; }
+.steps li::before { counter-increment: step; content:counter(step); display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#082f49; margin-right:10px; font-weight:700; }
+
+.kbd { border:1px solid var(--border); border-bottom-width:2px; border-radius:6px; padding:0 6px; display:inline-block; background:#0b1220; }
+
+details { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px; }
+details+details { margin-top:10px; }
+summary { cursor:pointer; font-weight:600; }
+
+.copy { display:inline-flex; align-items:center; gap:8px; border:1px dashed var(--border); border-radius:10px; padding:8px 12px; background:#0b1220; }
+.inline { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.small { font-size:12px; color:#94a3b8; }
+.hl { color:#bbf7d0; }
+.notice { border-left:3px solid var(--accent); padding:8px 12px; background:#0b1220; border-radius:8px; }
+.hash { word-break:break-all; }
+
+/* Tables */
+table { margin:0 auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; }
+.table { width:100%; border-collapse:separate; border-spacing:0 8px; }
+.table td, .table th { padding:10px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.table th { font-weight:600; text-align:left; }
+.table tr { background:var(--panel); }
+
+/* Shop admin table tweaks */
+td.actions, th.actions {
+  min-width: 160px;              /* room for both buttons */
+  text-align: left;
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: .5rem;
+  align-items: center;
+}
+
+.btn {
+  padding: .4rem .7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, #3a3a3a);
+  background: rgba(255,255,255,.04);
+  cursor: pointer;
+  color: #2e8b57;
+}
+
+.btn-save {
+  border-color: #2e8b57;
+  color: #2e8b57;
+}
+
+.btn-delete {
+  border-color: #b24545;
+  color: #b24545;
+  background: rgba(178, 69, 69, .12);
+}
+
+.btn-delete:hover { background: rgba(178, 69, 69, .2); }
+.btn-save:hover   { background: rgba(46, 139, 87, .12); }
+
+/* Optional: keep the Actions column visible when the table scrolls horizontally */
+table thead th:last-child,
+table tbody td.actions {
+  position: sticky;
+  right: 0;
+  background: var(--panel, #12161d);
+}
+
+/* If buttons are still clipped, ensure no ancestor hides overflow */
+.table-wrap, .card, td.actions { overflow: visible; }
+.admin-tabs {
+  display: flex;
+  gap: 1rem;
+  border-bottom: 2px solid #ccc;
+  margin: 1rem 0;
+  padding-bottom: .5rem;
+}
+.admin-tabs a {
+  text-decoration: none;
+  padding: .5rem 1rem;
+  border-radius: 6px 6px 0 0;
+  background: rgba(255,255,255,.04);
+  color: #2e8b57;
+  font-weight: bold;
+}
+.admin-tabs a:hover {
+  background: rgba(255,255,255,.1);
+}
+.admin-tabs a.active {
+  background: #2e8b57;
+  border: 1px solid #ccc;
+  border-bottom: 2px solid #fff;
+  color: #000;
+}
