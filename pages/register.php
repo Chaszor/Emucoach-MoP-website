@@ -26,13 +26,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 ?>
-
 <h2 align="center">Register</h2>
-<form method="POST">
-    Username: <input type="text" name="username"><br>
-    Password: <input type="password" name="password"><br>
-    Email: <input type="email" name="email"><br>
-    <button type="submit">Register</button>
+<form method="POST" class="form-center">
+    Username: <input type="text" name="username" required><br>
+    Password: <input type="password" name="password" required><br>
+    Email: <input type="email" name="email" required><br>
+    <button type="submit" class="btn">Register</button>
 </form>
+
+<style>
+.form-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.btn {
+    padding: 8px 16px;
+    margin-top: 10px;
+}
+</style>
 
 <?php include("../includes/footer.php"); ?>

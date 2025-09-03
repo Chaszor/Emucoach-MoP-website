@@ -8,6 +8,7 @@ $port = 3724;          // auth server port (usually 3724)
 $online = @fsockopen($server, $port, $errno, $errstr, 2);
 
 if ($online) {
+    echo "<h2 style='text-align: center'>Server Status</h2>";
     echo "<p style='color:green' class='hero'>Server is Online!</p>";
     fclose($online);
 } else {

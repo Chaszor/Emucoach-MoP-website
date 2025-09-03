@@ -118,8 +118,8 @@ if (!$hasHeader): ?>
 <?php endif; ?>
 
   <div class="wrap">
-    <section class="hero">
-      <h1>Download the Client & Connect</h1>
+    <section>
+      <h1 style="text-align: center">Download the Client & Connect</h1>
       <p class="lead">
         Grab a game client below and point your <span class="mono">realmlist</span> to
         <strong class="hl"><?=h($REALMLIST)?></strong>.

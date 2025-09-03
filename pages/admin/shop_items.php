@@ -136,7 +136,7 @@ if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
 ?>
 
 <section class="card">
-  <h3>Shop Items</h3>
+  <h3 style="text-align: center">Shop Items</h3>
   <?php if (!empty($shop_msg)): ?>
     <p style="color:<?php echo strpos($shop_msg, 'fail') !== false ? 'crimson' : 'green'; ?>;">
       <?php echo htmlspecialchars($shop_msg); ?>
@@ -204,50 +204,71 @@ if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
   </details>
 
   <!-- Existing Items -->
-  <h4 style="margin-top:1rem;">Existing items</h4>
-  <div style="max-width:100%; overflow:auto;">
-    <table>
-      <thead>
-        <tr>
-          <th class="sortable">ID <span class="arrow"></span></th>
-          <th class="sortable">Item Entry <span class="arrow"></span></th>
-          <th class="sortable">Name <span class="arrow"></span></th>
-          <th class="sortable">Price <span class="arrow"></span></th>
-          <th class="sortable">Stack <span class="arrow"></span></th>
-          <th class="sortable">Category <span class="arrow"></span></th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php foreach ($items as $row): ?>
-          <tr>
-            <form method="POST">
-              <input type="hidden" name="id" value="<?php echo (int)$row['id']; ?>">
-              <td><?php echo (int)$row['id']; ?></td>
-              <td><input type="number" name="item_entry" min="1" value="<?php echo (int)$row['item_entry']; ?>" required></td>
-              <td><input type="text" name="name" value="<?php echo htmlspecialchars($row['name']); ?>" maxlength="120" required></td>
-              <td><input type="number" step="0.01" min="0" name="price" value="<?php echo htmlspecialchars((string)$row['price']); ?>" required></td>
-              <td><input type="number" min="1" name="stack" value="<?php echo (int)$row['stack']; ?>" required></td>
-              <td>
-                <select name="category_id">
-                  <option value="" <?php echo $row['category_id'] ? '' : 'selected'; ?>>— None —</option>
-                  <?php foreach ($cats as $c): ?>
-                    <option value="<?php echo (int)$c['id']; ?>" <?php echo ((int)$row['category_id'] === (int)$c['id']) ? 'selected' : ''; ?>>
-                      <?php echo htmlspecialchars($c['name']); ?>
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-              </td>
-              <td class="actions">
-                <button type="submit" name="shop_action" value="update" class="btn btn-save">Save</button>
-                <button type="submit" name="shop_action" value="delete" class="btn btn-delete" formnovalidate onclick="return confirm('Delete item #<?php echo (int)$row['id']; ?>?');">Delete</button>
-              </td>
-            </form>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+<h3 style="margin-top:1rem; text-align: center">Existing Items</h3>
+
+<form method="POST" id="itemForm" style="margin:.5rem 0; display:grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap:.5rem; align-items:end;">
+  <input type="hidden" name="shop_action" value="update">
+  <input type="hidden" name="id" id="item_id">
+
+  <label>Select Item
+    <select id="itemSelect" onchange="populateItem(this.value)" style="width:100%;">
+      <option value="" >— Choose an item —</option>
+      <?php foreach ($items as $row): ?>
+        <option value="<?php echo (int)$row['id']; ?>"
+          data-entry="<?php echo (int)$row['item_entry']; ?>"
+          data-name="<?php echo htmlspecialchars($row['name']); ?>"
+          data-price="<?php echo htmlspecialchars((string)$row['price']); ?>"
+          data-stack="<?php echo (int)$row['stack']; ?>"
+          data-cat="<?php echo (int)$row['category_id']; ?>">
+          [<?php echo (int)$row['item_entry']; ?>] <?php echo htmlspecialchars($row['name']); ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </label>
+
+  <label>Item Entry
+    <input type="number" name="item_entry" id="item_entry" min="1" required>
+  </label>
+  <label>Name
+    <input type="text" name="name" id="item_name" maxlength="120" required>
+  </label>
+  <label>Price
+    <input type="number" step="0.01" min="0" name="price" id="item_price" required>
+  </label>
+  <label>Stack
+    <input type="number" min="1" name="stack" id="item_stack" required>
+  </label>
+  <label>Category
+    <select name="category_id" id="item_category">
+      <option value="">— None —</option>
+      <?php foreach ($cats as $c): ?>
+        <option value="<?php echo (int)$c['id']; ?>"><?php echo htmlspecialchars($c['name']); ?></option>
+      <?php endforeach; ?>
+    </select>
+  </label>
+
+  <div style="grid-column: span 6; text-align:center;">
+    <button type="submit" class="btn btn-save">Save</button>
+    <button type="submit" name="shop_action" value="delete" class="btn btn-delete"
+      onclick="return confirm('Delete this item?');">Delete</button>
   </div>
+</form>
+
+<script>
+function populateItem(id) {
+  const sel = document.getElementById('itemSelect');
+  const opt = sel.querySelector(`option[value="${id}"]`);
+  if (!opt) return;
+
+  document.getElementById('item_id').value = id;
+  document.getElementById('item_entry').value = opt.dataset.entry || '';
+  document.getElementById('item_name').value = opt.dataset.name || '';
+  document.getElementById('item_price').value = opt.dataset.price || '';
+  document.getElementById('item_stack').value = opt.dataset.stack || '';
+  document.getElementById('item_category').value = opt.dataset.cat || '';
+}
+</script>
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const getCellValue = (row, index) => {
@@ -296,4 +317,10 @@ document.addEventListener("DOMContentLoaded", () => {
 <style>
 th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 th.sortable .arrow { font-size: 0.8em; opacity: 0.6; margin-left: 4px; }
+section {
+  max-width: 1200px;   /* keeps it from stretching too far */
+  margin: 0 auto;      /* centers horizontally */
+  padding: 1rem;       /* breathing room so content doesn’t touch edges */
+  box-sizing: border-box;
+}
 </style>

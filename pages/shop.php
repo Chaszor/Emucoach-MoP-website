@@ -20,19 +20,43 @@ function flash(string $type, string $msg): void {
     echo "<div class='flash {$cls}'>" . htmlspecialchars($msg) . "</div>";
 }
 
-function log_pay_history(mysqli $auth_conn, string $username, string $orderNo, float $price,
-                         string $status, string $cpparam = '', string $synType = 'SHOP'): void {
+function log_pay_history(
+    mysqli $auth_conn,
+    int $account_id,
+    string $username,
+    string $orderNo,
+    float $price,
+    string $status,
+    string $cpparam = '',
+    string $synType = 'SHOP'
+): void {
     $stmt = $auth_conn->prepare("
-        INSERT INTO pay_history (orderNo, synType, status, price, time, cpparam, username)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO pay_history 
+            (account_id, orderNo, synType, status, price, time, cpparam, username)
+        VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)
     ");
     if ($stmt) {
-        $now = date('Y-m-d H:i:s');
-        $stmt->bind_param('sssdsis', $orderNo, $synType, $status, $price, $now, $cpparam, $username);
-        $stmt->execute();
+        $stmt->bind_param(
+            'isssdss',
+            $account_id,
+            $orderNo,
+            $synType,
+            $status,
+            $price,
+            $cpparam,
+            $username
+        );
+        if (!$stmt->execute()) {
+            echo "Insert failed: " . $stmt->error;
+        }
         $stmt->close();
+    } else {
+        echo "SQL Error: " . $auth_conn->error;
     }
 }
+
+
+
 
 function get_account(mysqli $auth_conn, string $username): ?array {
     $stmt = $auth_conn->prepare("SELECT id, username, IFNULL(cash,0) AS cash FROM account WHERE username = ? LIMIT 1");
@@ -174,13 +198,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
                     }
                     if ($ok) {
                         $auth_conn->commit();
-                        log_pay_history($auth_conn, $username, $orderNo, $price, 'SUCCESS', 'item=' . $entry);
+                        log_pay_history($auth_conn, $account_id, $username, $orderNo, $price, 'SUCCESS', 'item=' . $entry);
                         flash('ok', "Delivered {$item['name']} x{$stack} to {$char_name}. Deducted {$price} points.");
                         $account = get_account($auth_conn, $username);
                         $cash    = (float)$account['cash'];
                     } else {
                         $auth_conn->rollback();
-                        log_pay_history($auth_conn, $username, $orderNo, $price, 'FAILED', $msg);
+                        log_pay_history($auth_conn, $account_id, $username, $orderNo, $price, 'FAILED', $msg);
                         flash('err', $msg);
                     }
                 } else {
@@ -198,7 +222,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
 }
 
 /* ----------------------------- UI ---------------------------------------- */
-
+echo "<section>";
+echo "<h2 style=\"text-align: center\">Premier Shop</h2>";
+echo "</section>";
 $currentCatId = isset($_GET['cat']) ? (int)$_GET['cat'] : 0;
 $cats = get_categories($auth_conn);
 

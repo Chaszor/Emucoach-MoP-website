@@ -1,6 +1,6 @@
 <?php
 // pages/admin.php
-// Admin panel with tab navigation for settings, shop items, and tools.
+// Admin panel with tab navigation for settings, shop items, tools, accounts, characters, and logs.
 
 require_once("../config.php");
 require_once("../includes/header.php");
@@ -25,13 +25,15 @@ function is_admin($auth_conn, $account_id) {
 }
 
 $account_id = (int)$_SESSION["account_id"];
+$username   = $_SESSION["username"] ?? "unknown";
+
 if (!is_admin($auth_conn, $account_id)) {
     echo "<p>Access denied. Admins only.</p>";
     require_once("../includes/footer.php");
     exit;
 }
 
-// --- settings stored in auth.site_settings ---
+// --- ensure site_settings table exists ---
 $auth_conn->query("
 CREATE TABLE IF NOT EXISTS site_settings (
     `key`       VARCHAR(64) PRIMARY KEY,
@@ -41,6 +43,21 @@ CREATE TABLE IF NOT EXISTS site_settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ");
 
+// --- ensure activity_log table exists ---
+$auth_conn->query("
+CREATE TABLE IF NOT EXISTS activity_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    account_id INT NOT NULL,
+    username VARCHAR(50) NOT NULL,
+    action VARCHAR(255) NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX(account_id),
+    INDEX(username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+");
+
+// --- helpers for site settings ---
 function get_setting($auth_conn, $key, $default=null) {
     $stmt = $auth_conn->prepare("SELECT value FROM site_settings WHERE `key`=?");
     $stmt->bind_param("s", $key);
@@ -58,6 +75,18 @@ function set_setting($auth_conn, $key, $value) {
     ");
     $v = (string)$value;
     $stmt->bind_param("ss", $key, $v);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// --- helper for activity logging ---
+function log_activity(mysqli $auth_conn, int $account_id, string $username, string $action): void {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $stmt = $auth_conn->prepare("
+        INSERT INTO activity_log (account_id, username, action, ip_address)
+        VALUES (?, ?, ?, ?)
+    ");
+    $stmt->bind_param("isss", $account_id, $username, $action, $ip);
     $stmt->execute();
     $stmt->close();
 }
@@ -96,6 +125,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     set_setting($auth_conn, "soap_enabled",          $soap);
 
     $msg = "Settings saved.";
+    log_activity($auth_conn, $account_id, $username, "Updated site settings");
 }
 
 // --- read current ---
@@ -114,15 +144,16 @@ $coins_per_hour   = $interval_minutes > 0 ? ($coins_per_interval * (60 / $interv
 // --- detect active tab (default = settings) ---
 $tab = $_GET['tab'] ?? 'settings';
 ?>
-<h2>Admin Panel</h2>
+<h2 style="text-align: center">Admin Panel</h2>
 <?php if ($msg): ?><p style="color:green"><?php echo htmlspecialchars($msg); ?></p><?php endif; ?>
 
-<nav class="admin-tabs" >
-  <a href="admin.php?tab=settings" class="<?php echo $tab === 'settings' ? 'active' : ''; ?>">Settings</a>
-  <a href="admin.php?tab=shop" class="<?php echo $tab === 'shop' ? 'active' : ''; ?>">Shop Items</a>
-  <a href="admin.php?tab=tools" class="<?php echo $tab === 'tools' ? 'active' : ''; ?>">Tools</a>
-  <a href="admin.php?tab=account" class="<?php echo $tab === 'account' ? 'active' : ''; ?>">Account</a>
+<nav class="admin-tabs">
+  <a href="admin.php?tab=settings"   class="<?php echo $tab === 'settings' ? 'active' : ''; ?>">Settings</a>
+  <a href="admin.php?tab=shop"       class="<?php echo $tab === 'shop' ? 'active' : ''; ?>">Shop Items</a>
+  <a href="admin.php?tab=tools"      class="<?php echo $tab === 'tools' ? 'active' : ''; ?>">Tools</a>
+  <a href="admin.php?tab=account"    class="<?php echo $tab === 'account' ? 'active' : ''; ?>">Account</a>
   <a href="admin.php?tab=characters" class="<?php echo $tab === 'characters' ? 'active' : ''; ?>">Characters</a>
+  <a href="admin.php?tab=logs"       class="<?php echo $tab === 'logs' ? 'active' : ''; ?>">Logs</a>
 </nav>
 
 <?php if ($tab === 'settings'): ?>
@@ -154,6 +185,9 @@ $tab = $_GET['tab'] ?? 'settings';
 
 <?php elseif ($tab === 'characters'): ?>
   <?php include("admin/characters.php"); ?>
+
+<?php elseif ($tab === 'logs'): ?>
+  <?php include("admin/logs.php"); ?>
 <?php endif; ?>
 
 <style>
@@ -162,6 +196,7 @@ label { display:block; margin:.3rem 0; }
 
 .admin-tabs {
   display: flex;
+  justify-content: center;
   gap: 1rem;
   border-bottom: 2px solid #ccc;
   margin: 1rem 0;
