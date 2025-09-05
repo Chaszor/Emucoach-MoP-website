@@ -1,7 +1,7 @@
 <?php
 /**
- * Shop page — mysqli + SOAP delivery + categories (Approach B)
- * No ID column in the table output.
+ * Shop page — BattlePay integration (world DB)
+ * Uses battle_pay_entry, battle_pay_group, battle_pay_product, battle_pay_product_items
  */
 
 require_once __DIR__ . '/../config.php';
@@ -46,17 +46,10 @@ function log_pay_history(
             $cpparam,
             $username
         );
-        if (!$stmt->execute()) {
-            echo "Insert failed: " . $stmt->error;
-        }
+        $stmt->execute();
         $stmt->close();
-    } else {
-        echo "SQL Error: " . $auth_conn->error;
     }
 }
-
-
-
 
 function get_account(mysqli $auth_conn, string $username): ?array {
     $stmt = $auth_conn->prepare("SELECT id, username, IFNULL(cash,0) AS cash FROM account WHERE username = ? LIMIT 1");
@@ -81,49 +74,45 @@ function user_characters(mysqli $char_conn, int $account_id): array {
     return $out;
 }
 
+/* ---- Categories (battle_pay_group) ---- */
 function get_categories(mysqli $db): array {
-    $sql = "SELECT c.id, c.name, COUNT(i.id) AS cnt
-            FROM shop_categories c
-            LEFT JOIN shop_items i ON i.category_id = c.id
-            GROUP BY c.id, c.name
-            ORDER BY c.name";
+    $sql = "SELECT g.id, g.name, COUNT(e.id) AS cnt
+            FROM battle_pay_group g
+            LEFT JOIN battle_pay_entry e ON e.groupId = g.id
+            GROUP BY g.id, g.name
+            ORDER BY g.idx ASC";
     $res = $db->query($sql);
     $out = [];
     if ($res) { while ($r = $res->fetch_assoc()) $out[] = $r; $res->close(); }
     return $out;
 }
 
+/* ---- Items (entry + product + product_items) ---- */
 function list_shop_items(mysqli $db, ?int $categoryId = null): array {
+    $sql = "SELECT e.id, e.title, e.description,
+                   p.price, pi.itemId, pi.count, g.name AS category
+            FROM battle_pay_entry e
+            JOIN battle_pay_product p ON p.id = e.productId
+            JOIN battle_pay_product_items pi ON pi.productId = p.id
+            JOIN battle_pay_group g ON g.id = e.groupId";
     if ($categoryId) {
-        $stmt = $db->prepare("
-            SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id, c.name AS category
-            FROM shop_items i
-            LEFT JOIN shop_categories c ON c.id = i.category_id
-            WHERE i.category_id = ?
-            ORDER BY i.name ASC, i.id ASC
-        ");
-        $stmt->bind_param('i', $categoryId);
-        $stmt->execute();
-        $res = $stmt->get_result();
-    } else {
-        $res = $db->query("
-            SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id, c.name AS category
-            FROM shop_items i
-            LEFT JOIN shop_categories c ON c.id = i.category_id
-            ORDER BY c.name ASC, i.name ASC, i.id ASC
-        ");
+        $sql .= " WHERE e.groupId = " . (int)$categoryId;
     }
+    $sql .= " ORDER BY g.idx, e.idx";
+    $res = $db->query($sql);
+
     $items = [];
     if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
-    if (isset($stmt)) $stmt->close();
     return $items;
 }
 
 function get_shop_item_by_id(mysqli $db, int $id): ?array {
     $stmt = $db->prepare("
-        SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id
-        FROM shop_items i
-        WHERE i.id = ?
+        SELECT e.id, e.title, p.price, pi.itemId, pi.count, e.groupId
+        FROM battle_pay_entry e
+        JOIN battle_pay_product p ON p.id = e.productId
+        JOIN battle_pay_product_items pi ON pi.productId = p.id
+        WHERE e.id = ?
         LIMIT 1
     ");
     if (!$stmt) return null;
@@ -166,11 +155,12 @@ if (!$account) {
 $account_id = (int)$account['id'];
 $cash       = (float)$account['cash'];
 
+/* ---- Handle Purchases ---- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
-    $item_id   = (int)($_POST['item_id'] ?? 0);
+    $entry_id  = (int)($_POST['entry_id'] ?? 0);
     $char_guid = (int)($_POST['char_guid'] ?? 0);
-    if ($item_id && $char_guid) {
-        $item = get_shop_item_by_id($auth_conn, $item_id);
+    if ($entry_id && $char_guid) {
+        $item = get_shop_item_by_id($world_conn, $entry_id);
         if ($item) {
             $stmt = $char_conn->prepare("SELECT name FROM characters WHERE guid = ? AND account = ? LIMIT 1");
             $stmt->bind_param('ii', $char_guid, $account_id);
@@ -181,8 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
             if ($row) {
                 $char_name = $row['name'];
                 $price     = (float)$item['price'];
-                $entry     = (int)$item['item_entry'];
-                $stack     = max(1, (int)$item['stack']);
+                $entry     = (int)$item['itemId'];
+                $stack     = max(1, (int)$item['count']);
                 if ($cash >= $price) {
                     $auth_conn->begin_transaction();
                     $ok = true; $msg = '';
@@ -199,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
                     if ($ok) {
                         $auth_conn->commit();
                         log_pay_history($auth_conn, $account_id, $username, $orderNo, $price, 'SUCCESS', 'item=' . $entry);
-                        flash('ok', "Delivered {$item['name']} x{$stack} to {$char_name}. Deducted {$price} points.");
+                        flash('ok', "Delivered {$item['title']} x{$stack} to {$char_name}. Deducted {$price} points.");
                         $account = get_account($auth_conn, $username);
                         $cash    = (float)$account['cash'];
                     } else {
@@ -223,33 +213,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
 
 /* ----------------------------- UI ---------------------------------------- */
 echo "<section>";
-echo "<h2 style=\"text-align: center\">Premier Shop</h2>";
+echo "<h2 style=\"text-align: center\">BattlePay Shop</h2>";
 echo "</section>";
+
 $currentCatId = isset($_GET['cat']) ? (int)$_GET['cat'] : 0;
-$cats = get_categories($auth_conn);
+$cats = get_categories($world_conn);
 
 $baseUrl = strtok($_SERVER['REQUEST_URI'], '?');
 echo "<div style='margin:10px 0; display:flex; gap:8px; flex-wrap:wrap'>";
-
-// All tab
-$active = ($currentCatId === 0);
-echo "<a href='{$baseUrl}' class='tab-link" . ($active ? " active" : "") . "'>All</a>";
-
-// Category tabs
+echo "<a href='{$baseUrl}' style='padding:6px 10px; border-radius:6px; text-decoration:none;' class='btn'"
+   . ($currentCatId === 0 ? " background:#eef;" : " background:#fff;")
+   . "'>All</a>";
 foreach ($cats as $c) {
     if ((int)$c['cnt'] === 0) continue;
     $active = ($currentCatId === (int)$c['id']);
     $name = htmlspecialchars($c['name']);
     $cnt  = (int)$c['cnt'];
-    echo "<a href='{$baseUrl}?cat={$c['id']}' class='tab-link" . ($active ? " active" : "") . "'>"
-       . "{$name} <span style='opacity:.6'>({$cnt})</span></a>";
+    echo "<a href='{$baseUrl}?cat={$c['id']}' "
+       . "style='padding:6px 10px; border-radius:6px; text-decoration:none;' class='btn'"
+       . ($active ? " background:#eef;" : " background:#fff;")
+       . "'>{$name} <span style='opacity:.6'>({$cnt})</span></a>";
 }
 echo "</div>";
-
 echo "<br>";
 echo "<div style='margin-bottom:8px; font-size: 1.6em;'>Points: <b>" . number_format($cash, 0) . "</b></div>";
 
-$items = list_shop_items($auth_conn, $currentCatId ?: null);
+$items = list_shop_items($world_conn, $currentCatId ?: null);
 
 if (!$items) {
     echo "<p>No items configured yet.</p>";
@@ -258,7 +247,7 @@ if (!$items) {
     echo "<tr>
             <th class='sortable'>Item <span class='arrow'></span></th>
             <th class='sortable'>Price <span class='arrow'></span></th>
-            <th>Stack <span class='arrow'></span></th>
+            <th>Count</th>
             <th>To Character</th>
           </tr>";
     foreach ($items as $row) {
@@ -266,15 +255,15 @@ if (!$items) {
 
         // NAME
         echo "  <td>"
-           . "    <a href='https://www.wowhead.com/mop-classic/item=".(int)$row['item_entry']."' rel='wowhead'>"
-           .          htmlspecialchars($row['name'])
+           . "    <a href='https://www.wowhead.com/mop-classic/item=".(int)$row['itemId']."' rel='wowhead'>"
+           .          htmlspecialchars($row['title'])
            . "    </a> "
-           . "    <span style='opacity:.6'>(Entry " . (int)$row['item_entry'] . ")</span>"
+           . "    <span style='opacity:.6'>(Entry " . (int)$row['itemId'] . ")</span>"
            . "  </td>";
 
-        // PRICE & STACK
+        // PRICE & COUNT
         echo "  <td>" . htmlspecialchars((string)$row['price']) . "</td>";
-        echo "  <td>" . (int)$row['stack'] . "</td>";
+        echo "  <td>" . (int)$row['count'] . "</td>";
 
         // CHARACTER SELECT + Buy
         echo "  <td>";
@@ -285,7 +274,7 @@ if (!$items) {
             echo "<option value='".(int)$c['guid']."'>".htmlspecialchars($c['name'])."</option>";
         }
         echo "      </select>";
-        echo "      <input type='hidden' name='item_id' value='".(int)$row['id']."'>";
+        echo "      <input type='hidden' name='entry_id' value='".(int)$row['id']."'>";
         echo "      <button class='btn' type='submit' name='buy' value='1' onclick=\"return confirm('Are you sure you want to BUY this item? This cannot be undone.');\">Buy</button>";
         echo "    </form>";
         echo "  </td>";
@@ -299,31 +288,6 @@ if (!$items) {
 <style>
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable .arrow { font-size: 0.8em; opacity: 0.6; }
-.tab-link {
-  text-decoration: none;
-  transition: all 0.2s ease;
-  padding: .4rem .7rem;
-  border-radius: 10px;
-  border: 1px solid var(--border, #3a3a3a);
-  background: rgba(255,255,255,.04);
-  cursor: pointer;
-  color: #2e8b57;   /* sea green text */
-  display: inline-block;
-}
-
-.tab-link:hover {
-  background: #f5f5f5;
-  color: #226644;   /* darker green on hover */
-}
-
-.tab-link.active {
-  background: #337ab7;   /* blue active background */
-  color: #fff;           /* white text for contrast */
-  font-weight: bold;
-  border-color: #2e6da4;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-}
-
 </style>
 
 <script>

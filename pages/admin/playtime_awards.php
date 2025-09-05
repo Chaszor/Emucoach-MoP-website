@@ -1,5 +1,5 @@
 <section class="card">
-  <h3>Playtime Rewards</h3>
+  <h2 style="text-align: center;">Playtime Rewards</h3>
   <form method="POST">
     <input type="hidden" name="settings_action" value="save_settings">
 
@@ -40,6 +40,15 @@
     </label>
 
     <br><br>
-    <button type="submit">Save Settings</button>
+    <button type="submit" class="btn">Save Settings</button>
   </form>
 </section>
+
+  <section class="card">
+    <h3>Notes</h3>
+    <ul>
+      <li>Settings are stored in <code>auth.site_settings</code> and read by <code>cron/award_playtime.php</code>.</li>
+      <li><strong>Tip:</strong> Schedule the cron via Windows Task Scheduler (e.g. every 5 minutes).</li>
+      <li>Use a GM account for SOAP if you enable in-game mail.</li>
+    </ul>
+  </section>

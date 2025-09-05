@@ -53,12 +53,13 @@ $isGM = $isLoggedIn ? user_is_gm($auth_conn ?? null, (int)$_SESSION["account_id"
 </head>
 <body>
     <header>
-        <h1>Welcome to My WoW Private Server</h1>
+        <h1>Epic WoW</h1>
         <nav>
         <a href="/wowsite/index.php">Home</a>
         <?php if (!isset($_SESSION["username"])): ?>
             <a href="/wowsite/pages/register.php">Register</a>
             <a href="/wowsite/pages/login.php">Login</a>
+            <a href="/wowsite/pages/status.php">Server Status</a>
         <?php else: ?>
             <a href="/wowsite/pages/dashboard.php">Dashboard</a>
             <a href="/wowsite/pages/download_and_connect.php">Download & Install</a>
@@ -68,10 +69,10 @@ $isGM = $isLoggedIn ? user_is_gm($auth_conn ?? null, (int)$_SESSION["account_id"
               <!-- Visible only to GM accounts -->
               <a href="/wowsite/pages/admin.php">Admin</a>
             <?php endif; ?>
-
+            <a href="/wowsite/pages/status.php">Server Status</a>
             <a href="/wowsite/pages/logout.php">Logout</a>
         <?php endif; ?>
-        <a href="/wowsite/pages/status.php">Server Status</a>
+        
     </nav>
     </header>
     <main>

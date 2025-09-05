@@ -4,42 +4,7 @@ include("../includes/header.php");
 
 // Map race IDs to names
 // Races
-$races = [
-    1  => "Human",
-    2  => "Orc",
-    3  => "Dwarf",
-    4  => "Night Elf",
-    5  => "Undead",
-    6  => "Tauren",
-    7  => "Gnome",
-    8  => "Troll",
-    10 => "Blood Elf",
-    11 => "Draenei",
-    22 => "Worgen",
-    26 => "Pandaren",
-    9 => "Goblin"
-];
 
-// Classes
-$classes = [
-    1  => "Warrior",
-    2  => "Paladin",
-    3  => "Hunter",
-    4  => "Rogue",
-    5  => "Priest",
-    6  => "Death Knight",
-    7  => "Shaman",
-    8  => "Mage",
-    9  => "Warlock",
-    11 => "Druid",
-    10 => "Monk"
-];
-
-// Gender
-$genders = [
-    0 => "Male",
-    1 => "Female"
-];
 
 
 

@@ -32,6 +32,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     Password: <input type="password" name="password" required><br>
     Email: <input type="email" name="email" required><br>
     <button type="submit" class="btn">Register</button>
+    <p style="font-size:small;color:gray;">* Use your username for logins</p>
 </form>
 
 <style>

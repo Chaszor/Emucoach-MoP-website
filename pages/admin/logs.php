@@ -1,5 +1,5 @@
 <section class="card">
-  <h2>Logs</h2>
+  <h2 style="text-align: center;">Logs</h2>
   <form method="POST">
     <input type="hidden" name="admin_action" value="logs">
 
@@ -34,7 +34,7 @@
                   $res = $auth_conn->query("SELECT id, account_id, orderNo, synType, status, price, time, cpparam FROM pay_history ORDER BY time DESC LIMIT {$limit}");
                   break;
               case 'activity':
-                  $res = $auth_conn->query("SELECT account_id, username, action, details, time FROM activity_logs ORDER BY time DESC LIMIT {$limit}");
+                  $res = $auth_conn->query("SELECT account_id, username, action, created_at FROM activity_log ORDER BY created_at DESC LIMIT {$limit}");
                   break;
           }
 

@@ -9,26 +9,18 @@ if (!isset($char_conn) || $char_conn->connect_error) {
     return;
 }
 
-/* ---------------- SOAP Helper ---------------- */
-function send_soap_command(string $command): bool {
-    global $soap_enabled, $soap_host, $soap_port, $soap_user, $soap_pass;
-
-    if (!$soap_enabled) return false;
-
-    try {
-        $client = new SoapClient(NULL, array(
-            "location" => "http://{$soap_host}:{$soap_port}/",
-            "uri"      => "urn:TC",
-            "style"    => SOAP_RPC,
-            "login"    => $soap_user,
-            "password" => $soap_pass,
-        ));
-        $client->__soapCall("executeCommand", array("command" => $command));
-        return true;
-    } catch (Exception $e) {
-        echo "<div class='flash err'>SOAP Error: " . htmlspecialchars($e->getMessage()) . "</div>";
-        return false;
+/* ---------------- Helpers ---------------- */
+function get_character(mysqli $conn, int $guid): ?array {
+    $stmt = $conn->prepare("SELECT name, online FROM characters WHERE guid=?");
+    $stmt->bind_param("i", $guid);
+    $stmt->execute();
+    $stmt->bind_result($name, $online);
+    if ($stmt->fetch()) {
+        $stmt->close();
+        return ['name' => $name, 'online' => $online];
     }
+    $stmt->close();
+    return null;
 }
 
 /* ---------------- Account Selector ---------------- */
@@ -43,72 +35,120 @@ $selected_account = isset($_GET['account_id']) ? (int)$_GET['account_id'] : 0;
 
 /* ---------------- Actions ---------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['guid'])) {
-    $guid = (int)$_POST['guid'];
+    $guid       = (int)$_POST['guid'];
     $account_id = isset($_POST['account_id']) ? (int)$_POST['account_id'] : 0;
+    $admin_user = $_SESSION['username'] ?? 'system';
+    $action     = $_POST['action'];
 
-    switch ($_POST['action']) {
-        case 'set_level':
-            if (isset($_POST['level'])) {
-                $level = (int)$_POST['level'];
-                $stmt = $char_conn->prepare("UPDATE characters SET level = ? WHERE guid = ?");
-                $stmt->bind_param("ii", $level, $guid);
-                $stmt->execute();
-                $stmt->close();
-                echo "<div class='flash ok'>Level updated to {$level} for character #{$guid}</div>";
-            }
-            break;
-
-        case 'set_gold':
-            if (isset($_POST['gold'])) {
-                $gold = (int)$_POST['gold'];
-                $money = $gold * 10000; // TrinityCore stores copper
-                $stmt = $char_conn->prepare("UPDATE characters SET money = ? WHERE guid = ?");
-                $stmt->bind_param("ii", $money, $guid);
-                $stmt->execute();
-                $stmt->close();
-                echo "<div class='flash ok'>Gold updated to {$gold} for character #{$guid}</div>";
-            }
-            break;
-
-        case 'delete':
-            $stmt = $char_conn->prepare("DELETE FROM characters WHERE guid = ?");
-            $stmt->bind_param("i", $guid);
-            $stmt->execute();
-            $stmt->close();
-            echo "<div class='flash ok'>Character #{$guid} deleted.</div>";
-            break;
-
-        case 'tele_gm':
-        case 'tele_hearth':
-        case 'kick':
-        case 'revive':
-            $stmt = $char_conn->prepare("SELECT name FROM characters WHERE guid=?");
-            $stmt->bind_param("i", $guid);
-            $stmt->execute();
-            $stmt->bind_result($charName);
-            if ($stmt->fetch()) {
-                switch ($_POST['action']) {
-                    case 'tele_gm':     $cmd = "character teleport {$charName} GMIsland"; break;
-                    case 'tele_hearth': $cmd = "character unstuck {$charName}"; break;
-                    case 'kick':        $cmd = "kick {$charName}"; break;
-                    case 'revive':      $cmd = "revive {$charName}"; break;
+    if ($char = get_character($char_conn, $guid)) {
+        switch ($action) {
+            case 'set_level':
+                if (isset($_POST['level'])) {
+                    $level = (int)$_POST['level'];
+                    [$ok, $resp] = sendSoap("character level {$char['name']} {$level}");
+                    if ($ok) {
+                        flash('ok', "SOAP: Level set to {$level} for {$char['name']}.");
+                    } else {
+                        $upd = $char_conn->prepare("UPDATE characters SET level=? WHERE guid=?");
+                        $upd->bind_param("ii", $level, $guid);
+                        $upd->execute();
+                        $upd->close();
+                        flash('err', "SOAP failed, DB: Level updated to {$level} for character #{$guid}. Error: {$resp}");
+                    }
+                    log_activity($auth_conn, $account_id, $admin_user, $action, "Set level {$level} for {$char['name']}");
                 }
-                send_soap_command($cmd);
-                echo "<div class='flash ok'>{$_POST['action']} executed for {$charName}.</div>";
-            }
-            $stmt->close();
-            break;
-    }
+                break;
 
-    // redirect back to admin.php characters tab with account preserved
-    header("Location: admin.php?tab=characters&account_id=" . $account_id);
-    exit;
+case 'set_gold':
+    if (isset($_POST['gold'])) {
+        $gold  = (int)$_POST['gold'];
+        $money = $gold * 10000;
+
+        // Check if character is offline
+        $stmt = $char_conn->prepare("SELECT online FROM characters WHERE guid=? LIMIT 1");
+        $stmt->bind_param("i", $guid);
+        $stmt->execute();
+        $stmt->bind_result($isOnline);
+        $stmt->fetch();
+        $stmt->close();
+
+        if ($isOnline) {
+            flash('err', "Cannot update gold: character {$char['name']} is online.");
+        } else {
+            $upd = $char_conn->prepare("UPDATE characters SET money=? WHERE guid=?");
+            $upd->bind_param("ii", $money, $guid);
+            $upd->execute();
+            $upd->close();
+
+            flash('ok', "Gold set to {$gold} for {$char['name']}.");
+            log_activity($auth_conn, $account_id, $admin_user, $action, "Set gold {$gold} for {$char['name']}");
+        }
+    }
+    break;
+
+
+            case 'send_gold':
+              if (isset($_POST['confirm_gold']) && is_numeric($_POST['confirm_gold'])) {
+        $gold  = (int)$_POST['confirm_gold'];
+        $money = $gold * 10000;
+
+        [$ok, $resp] = sendSoap("send money {$char['name']} \"Gold\" \"Enjoy\" {$money}");
+        if ($ok) {
+            flash('ok', "SOAP: Sent {$gold} gold to {$char['name']}.");
+        } else {
+            flash('err', "SOAP failed for {$char['name']}. Error: {$resp}");
+        }
+
+        log_activity($auth_conn, $account_id, $admin_user, $action, "Sent {$gold} gold to {$char['name']}");
+    }
+    break;
+            case 'delete':
+                [$ok, $resp] = sendSoap("character erase {$char['name']}");
+                if ($ok) {
+                    flash('ok', "SOAP: Character {$char['name']} erased.");
+                } else {
+                    sendSoap("kick {$char['name']}");
+                    sleep(1);
+                    flash('err', "SOAP failed, DB: Character {$char['name']} (#{$guid}) erased. Error: {$resp}");
+                }
+                log_activity($auth_conn, $account_id, $admin_user, $action, "Erased {$char['name']}");
+                break;
+
+            case 'tele_gm':
+                [$ok, $resp] = sendSoap("tele name {$char['name']} GMIsland");
+                $ok ? flash('ok', "Teleported {$char['name']} to GM Island.")
+                    : flash('err', "Failed to teleport {$char['name']} (Error: {$resp})");
+                log_activity($auth_conn, $account_id, $admin_user, $action, "Teleported {$char['name']} to GM Island");
+                break;
+
+            case 'tele_hearth':
+                [$ok, $resp] = sendSoap("unstuck {$char['name']}");
+                $ok ? flash('ok', "Teleported {$char['name']} to hearth location.")
+                    : flash('err', "Failed to teleport {$char['name']} (Error: {$resp})");
+                log_activity($auth_conn, $account_id, $admin_user, $action, "Teleported {$char['name']} to hearth location");
+                break;
+
+            case 'kick':
+                [$ok, $resp] = sendSoap("kick {$char['name']}");
+                $ok ? flash('ok', "Kicked {$char['name']} from the server.")
+                    : flash('err', "Failed to kick {$char['name']} (Error: {$resp})");
+                log_activity($auth_conn, $account_id, $admin_user, $action, "Kicked {$char['name']}");
+                break;
+
+            case 'revive':
+                [$ok, $resp] = sendSoap("revive {$char['name']}");
+                $ok ? flash('ok', "Revived {$char['name']}.")
+                    : flash('err', "Failed to revive {$char['name']} (Error: {$resp})");
+                log_activity($auth_conn, $account_id, $admin_user, $action, "Revived {$char['name']}");
+                break;
+        }
+    }
 }
 
 /* ---------------- Fetch Characters ---------------- */
 if ($selected_account > 0) {
     $char_stmt = $char_conn->prepare("
-        SELECT c.guid, c.name, c.level, c.race, c.class, c.money, c.online, a.username
+        SELECT c.guid, c.name, c.level, c.race, c.class, c.gender, c.money, c.online, a.username
         FROM characters c
         JOIN auth.account a ON c.account = a.id
         WHERE a.id = ?
@@ -145,6 +185,7 @@ if ($selected_account > 0) {
         <th>Account</th>
         <th>Race</th>
         <th>Class</th>
+        <th>Gender</th>
         <th>Level</th>
         <th>Gold</th>
         <th>Status</th>
@@ -157,41 +198,73 @@ if ($selected_account > 0) {
         <td><?= htmlspecialchars($row['guid']) ?></td>
         <td><?= htmlspecialchars($row['name']) ?></td>
         <td><?= htmlspecialchars($row['username']) ?></td>
-        <td><?= htmlspecialchars($row['race']) ?></td>
-        <td><?= htmlspecialchars($row['class']) ?></td>
+        <td>
+          <?php
+            $raceName = $races[$row['race']] ?? "Unknown";
+            $raceIcon = "images/icons/race/{$row['race']}.png";
+            if (file_exists(__DIR__ . "/../../" . $raceIcon)) {
+                echo "<img src='{$raceIcon}' alt='{$raceName}' title='{$raceName}' style='height:20px;'> ";
+            }
+            echo htmlspecialchars($raceName);
+          ?>
+        </td>
+        <td>
+          <?php
+            $className = $classes[$row['class']] ?? "Unknown";
+            $classIcon = "images/icons/class/{$row['class']}.png";
+            if (file_exists(__DIR__ . "/../../" . $classIcon)) {
+                echo "<img src='{$classIcon}' alt='{$className}' title='{$className}' style='height:20px;'> ";
+            }
+            echo htmlspecialchars($className);
+          ?>
+        </td>
+        <td>
+          <?php
+            $genderName = $genders[$row['gender']] ?? "Unknown";
+            $genderIcon = "images/icons/gender/{$row['gender']}.png";
+            if (file_exists(__DIR__ . "/../../" . $genderIcon)) {
+                echo "<img src='{$genderIcon}' alt='{$genderName}' title='{$genderName}' style='height:20px;'> ";
+            }
+            echo htmlspecialchars($genderName);
+          ?>
+        </td>
         <td>
           <form method="post" action="admin.php?tab=characters&account_id=<?= $selected_account ?>" 
                 style="display:flex; gap:6px; align-items:center; margin:0;">
             <input type="hidden" name="guid" value="<?= $row['guid'] ?>">
             <input type="hidden" name="account_id" value="<?= $selected_account ?>">
-            <input type="number" name="level" value="<?= htmlspecialchars($row['level']) ?>" 
-                   style="width:70px; text-align:right;">
+            <input type="number" name="level" value="<?= htmlspecialchars($row['level']) ?>" style="width:70px; text-align:right;">
         </td>
         <td>
-            <input type="number" name="gold" value="<?= floor($row['money'] / 10000) ?>"
-                   style="width:90px; text-align:right;">
+            <input type="number" name="gold" value="<?= floor($row['money'] / 10000) ?>" style="width:90px; text-align:right;">
         </td>
-        <td><?= $row['online'] ? 'Online' : 'Offline' ?></td>
+        <td><?= $row['online'] ? '<span style="color:green">Online</span>' : 'Offline' ?></td>
         <td>
-            <div style="display:flex; gap:6px; flex-wrap: wrap;">
-                <button type="submit" name="action" value="set_level">Set Level</button>
-                <button type="submit" name="action" value="set_gold">Set Gold</button>
-                <button type="submit" name="action" value="tele_gm">GM Island</button>
-                <button type="submit" name="action" value="tele_hearth">Hearthstone</button>
-                <button type="submit" name="action" value="kick">Kick</button>
-                <button type="submit" name="action" value="revive">Revive</button>
-                <button type="submit" name="action" value="delete"
-                      onclick="return confirm('Are you sure you want to DELETE this character? This cannot be undone.');">
-                Delete
-              </button>
-            </div>
+            <button type="submit" name="action" value="set_level" class="btn">Set Level</button>
+            <button type="submit" name="action" value="set_gold" class="btn">Set Gold</button>
+            <button type="submit" name="action" value="send_gold" class="btn"
+                onclick="
+                    var gold = prompt('Enter amount of gold to send:');
+                    if (gold === null || gold.trim() === '' || isNaN(gold) || gold <= 0) {
+                        return false; // cancel if no valid input
+                    }
+                    this.form.confirm_gold.value = parseInt(gold, 10);
+                    return true;
+                ">
+                Send Gold
+            </button>
+            <input type="hidden" name="confirm_gold" value="">
+
+            <button type="submit" name="action" value="kick" class="btn">Kick</button>
+            <button type="submit" name="action" value="revive" class="btn">Revive</button>
+            <button type="submit" name="action" value="tele_gm" class="btn">Tele GM</button>
+            <button type="submit" name="action" value="tele_hearth" class="btn">Tele Hearth</button>
+            <button type="submit" name="action" value="delete" class="btn" onclick="return confirm('Delete this character?');">Delete</button>
           </form>
         </td>
       </tr>
     <?php endwhile; ?>
     </tbody>
   </table>
-  <?php elseif ($selected_account > 0): ?>
-    <p>No characters found for this account.</p>
   <?php endif; ?>
 </section>

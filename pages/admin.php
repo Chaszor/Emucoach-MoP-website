@@ -91,6 +91,7 @@ function log_activity(mysqli $auth_conn, int $account_id, string $username, stri
     $stmt->close();
 }
 
+
 // defaults aligned with cron/award_playtime.php
 $defaults = [
   "interval_minutes"      => "10",
@@ -135,7 +136,7 @@ $min_minutes            = (int)get_setting($auth_conn, "min_minutes",           
 $online_per_run_cap     = (int)get_setting($auth_conn, "online_per_run_cap",    $defaults["online_per_run_cap"]);
 $require_activity       = (int)get_setting($auth_conn, "require_activity",      $defaults["require_activity"]);
 $min_seconds_per_char   = (int)get_setting($auth_conn, "min_seconds_per_char",  $defaults["min_seconds_per_char"]);
-$soap_enabled           = (int)get_setting($auth_conn, "soap_enabled",          $defaults["soap_enabled"]);
+//$soap_enabled           = (int)get_setting($auth_conn, "soap_enabled",          $defaults["soap_enabled"]);
 
 // derived rates
 $coins_per_minute = $interval_minutes > 0 ? ($coins_per_interval / $interval_minutes) : 0.0;
@@ -149,6 +150,7 @@ $tab = $_GET['tab'] ?? 'settings';
 
 <nav class="admin-tabs">
   <a href="admin.php?tab=settings"   class="<?php echo $tab === 'settings' ? 'active' : ''; ?>">Settings</a>
+  <a href="admin.php?tab=news"       class="<?php echo $tab === 'news' ? 'active' : ''; ?>">News</a>
   <a href="admin.php?tab=shop"       class="<?php echo $tab === 'shop' ? 'active' : ''; ?>">Shop Items</a>
   <a href="admin.php?tab=tools"      class="<?php echo $tab === 'tools' ? 'active' : ''; ?>">Tools</a>
   <a href="admin.php?tab=account"    class="<?php echo $tab === 'account' ? 'active' : ''; ?>">Account</a>
@@ -159,26 +161,14 @@ $tab = $_GET['tab'] ?? 'settings';
 <?php if ($tab === 'settings'): ?>
   <?php include("admin/playtime_awards.php"); ?>
 
-  <section class="card">
-    <h3>Notes</h3>
-    <ul>
-      <li>Settings are stored in <code>auth.site_settings</code> and read by <code>cron/award_playtime.php</code>.</li>
-      <li><strong>Tip:</strong> Schedule the cron via Windows Task Scheduler (e.g. every 5 minutes).</li>
-      <li>Use a GM account for SOAP if you enable in-game mail.</li>
-    </ul>
-  </section>
-
 <?php elseif ($tab === 'shop'): ?>
   <?php include("admin/shop_items.php"); ?>
 
 <?php elseif ($tab === 'tools'): ?>
-  <section class="card">
-    <h3>Quick Tools</h3>
-    <ul>
-      <li><a href="/wowsite/cron/award_playtime.php" target="_blank" rel="noopener">Run award script in browser</a></li>
-      <li>CLI dry-run: <code>"C:\xampp\php\php.exe" "C:\xampp\htdocs\wowsite\cron\award_playtime.php" --dry-run --verbose</code></li>
-    </ul>
-  </section>
+  <?php include("admin/tools.php"); ?>
+
+<?php elseif ($tab === 'news'): ?>
+  <?php include("admin/news.php"); ?>
 
 <?php elseif ($tab === 'account'): ?>
   <?php include("admin/account.php"); ?>
