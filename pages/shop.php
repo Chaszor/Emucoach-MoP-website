@@ -229,7 +229,7 @@ $currentCatId = isset($_GET['cat']) ? (int)$_GET['cat'] : 0;
 $cats = get_categories($auth_conn);
 
 $baseUrl = strtok($_SERVER['REQUEST_URI'], '?');
-echo "<div style='margin:10px 0; display:flex; gap:8px; flex-wrap:wrap'>";
+echo "<div style='margin:10px 0; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;'>";
 
 // All tab
 $active = ($currentCatId === 0);
@@ -317,11 +317,11 @@ th.sortable .arrow { font-size: 0.8em; opacity: 0.6; }
 }
 
 .tab-link.active {
-  background: #337ab7;   /* blue active background */
-  color: #fff;           /* white text for contrast */
   font-weight: bold;
   border-color: #2e6da4;
   box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  background: #2e8b57;
+  color: #000;
 }
 
 </style>

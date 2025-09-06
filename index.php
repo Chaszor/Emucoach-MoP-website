@@ -1,5 +1,5 @@
 <?php 
-//include(__DIR__ . "/config.php");
+include(__DIR__ . "/config.php");
 include("includes/header.php"); ?>
 <section class="card">
 <?php
@@ -36,7 +36,7 @@ if ($stmt = $auth_conn->prepare("SELECT id, title, content, created_at
 
 
 <?php
-require_once __DIR__ . '/config.php'; // database connection ($auth_conn)
+//require_once __DIR__ . '/config.php'; // database connection ($auth_conn)
 
 
 ?>

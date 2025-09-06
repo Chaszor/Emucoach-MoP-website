@@ -100,7 +100,7 @@ $defaults = [
   "online_per_run_cap"    => "5",
   "require_activity"      => "0",
   "min_seconds_per_char"  => "900",
-  "soap_enabled"          => "1",
+  "soap_enabled"          => "0",
 ];
 
 // --- handle POST only for settings form ---
@@ -136,7 +136,7 @@ $min_minutes            = (int)get_setting($auth_conn, "min_minutes",           
 $online_per_run_cap     = (int)get_setting($auth_conn, "online_per_run_cap",    $defaults["online_per_run_cap"]);
 $require_activity       = (int)get_setting($auth_conn, "require_activity",      $defaults["require_activity"]);
 $min_seconds_per_char   = (int)get_setting($auth_conn, "min_seconds_per_char",  $defaults["min_seconds_per_char"]);
-//$soap_enabled           = (int)get_setting($auth_conn, "soap_enabled",          $defaults["soap_enabled"]);
+$soap_enabled           = (int)get_setting($auth_conn, "soap_enabled",          $defaults["soap_enabled"]);
 
 // derived rates
 $coins_per_minute = $interval_minutes > 0 ? ($coins_per_interval / $interval_minutes) : 0.0;

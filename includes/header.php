@@ -59,7 +59,7 @@ $isGM = $isLoggedIn ? user_is_gm($auth_conn ?? null, (int)$_SESSION["account_id"
         <?php if (!isset($_SESSION["username"])): ?>
             <a href="/wowsite/pages/register.php">Register</a>
             <a href="/wowsite/pages/login.php">Login</a>
-            <a href="/wowsite/pages/status.php">Server Status</a>
+            
         <?php else: ?>
             <a href="/wowsite/pages/dashboard.php">Dashboard</a>
             <a href="/wowsite/pages/download_and_connect.php">Download & Install</a>
