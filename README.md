@@ -1,323 +1,323 @@
-# New Server Install Guide — WoW Site + Playtime Rewards (Windows + XAMPP)
-_Last updated: 2025-09-01_
+# Emucoach MoP Website — README & Fresh Install Guide
 
-This guide walks you through bringing a **fresh Windows host** online with:
-- Apache/PHP/MySQL (XAMPP)
-- Your PHP website from `wowsite.zip`
-- Playtime coin awards via `cron/award_playtime.php`
-- Optional Admin Panel + SOAP delivery
-- Download page wiring (for distributing clients)
+This README explains how to deploy the **`wowsite/` website** in this ZIP on a **fresh Emucoach Mists of Pandaria (5.4.8) server**. It covers prerequisites, database prep, configuration, optional features (playtime rewards), and troubleshooting.
 
-If you're deploying on Linux, the same concepts apply—swap XAMPP for **Apache/Nginx + PHP + MariaDB** and adjust paths.
+---
+
+## What’s included (high level)
+
+```
+wowsite/
+  assets/                  CSS
+  config.php               Main config (DB + SOAP + helpers)
+  cron/                    award_playtime.php + log
+  downloads/               (you place client files here)
+  images/                  icons (races/classes/genders; optional)
+  includes/                header/footer
+  index.php                News feed (from auth.news)
+  pages/
+    admin.php + admin/*    Admin UI (settings, shop, tools, logs)
+    login.php, register.php, logout.php
+    dashboard.php, status.php
+    download_and_connect.php
+    shop.php               Web shop (uses auth.shop_* / account.cash)
+```
+
+> **Important:** The code expects Trinity/Emucoach-style databases named **`auth`**, **`characters`**, and **`world`**. If your repack uses different names (e.g., `mop_auth`, `mop_characters`, `mop_world`), adjust `config.php` accordingly.
 
 ---
 
 ## 1) Prerequisites
 
-**OS:** Windows 10/11 (Run installers _as Administrator_).  
-**Downloads:**  
-- XAMPP (PHP 8.x is fine)  
-- `wowsite.zip` (the site bundle you provided)  
-- Your MoP/Trinity/EmuCoach server binaries & databases
+* A working **Emucoach MoP 5.4.8** core (worldserver + authserver) with MySQL/MariaDB.
+* **PHP 7.4+** with extensions: `mysqli` (default), **`soap`** (enable in `php.ini` if you plan to use SOAP delivery/mail), and `openssl`.
+* A web server (e.g., **XAMPP on Windows** or Apache/Nginx on Linux).
+* Firewall allows the following where applicable:
 
-**Open ports on the firewall/router (adjust to your core):**
-- **80/443 TCP** — website (HTTP/HTTPS)
-- **3724 TCP** — authserver/logon (typical)
-- **8085 TCP** — worldserver (typical)
-- **7878 TCP** — SOAP (only if you enable in-game delivery)
-
-> Exact game ports can vary by repack/core—use the ones your world/auth server config specifies.
+  * **3724** (auth) and your worldserver realm port(s)
+  * **7878** (SOAP), if you enable SOAP
 
 ---
 
-## 2) Install XAMPP
+## 2) Deploy the website
 
-1. Install XAMPP to `C:\xampp`.
-2. Launch **XAMPP Control Panel** → start **Apache** and **MySQL**.
-3. Open **`C:\xampp\php\php.ini`** and ensure these extensions are **enabled** (remove `;` if present):
-   ```ini
-   extension=mysqli
-   extension=soap
-   extension=curl
-   extension=openssl
-   ```
-4. Restart **Apache** from the XAMPP Control Panel.
+1. Extract the zip and copy the **`wowsite/`** folder to your web root.
 
-> PHP `soap` is required for the optional in‑game mail delivery.
+   * **Windows (XAMPP):** `C:\xampp\htdocs\wowsite`
+   * **Linux (Apache):** `/var/www/html/wowsite`
+2. Ensure the webserver user can read `wowsite/`, and that `wowsite/cron/award_debug.log` is writable (the cron script overwrites the file per run).
+3. (Optional) Put client files in **`wowsite/downloads/`** (used by *Download & Install* page).
 
 ---
 
-## 3) Database Setup
+## 3) Configure databases & SOAP
 
-You can reuse the **auth** and **characters** databases from your core/repack, or create empty ones and point at the existing MySQL on the game host.
-
-### 3.1 Create databases (if needed)
-
-Open **phpMyAdmin** at http://localhost/phpmyadmin and create:
-- `auth`
-- `characters`
-
-Create a MySQL user (optional but recommended):
-- user: `webuser`
-- password: strong unique password
-- grant needed rights on `auth` and `characters`
-
-### 3.2 Import Admin Panel schema
-
-Import this file into **`auth`**:
-- `/admin/schema.sql`
-
-This creates the `admin_settings` table used by the admin panel.
-
-### 3.3 Create the `site_settings` table (for realmlist & toggles)
-
-Your site expects a simple key/value table named `site_settings` in the **`auth`** DB. Create it once:
-
-```sql
-CREATE TABLE IF NOT EXISTS site_settings (
-  `key`   VARCHAR(64) PRIMARY KEY,
-  `value` VARCHAR(255) NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-              ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Recommended defaults
-INSERT INTO site_settings (`key`,`value`) VALUES
-('realmlist', 'set realmlist YOUR.IP.OR.DOMAIN'),
-('interval_minutes', '10'),          -- 1 coin / 10 minutes
-('coins_per_interval', '1'),
-('require_activity', '0'),
-('min_seconds_per_char', '900'),     -- ignore < 15m characters
-('soap_enabled', '1')
-ON DUPLICATE KEY UPDATE `value`=VALUES(`value`);
-```
-
-> You can edit these from **`/pages/admin.php`** once logged in.
-
----
-
-## 4) Deploy the Website
-
-1. Extract `wowsite.zip` to **`C:\xampp\htdocs\wowsite\`**.
-   Your tree should look roughly like:
-   ```text
-   C:\xampp\htdocs\wowsite\
-     config.php
-     index.php
-     includes\
-     pages\
-     cron\
-     admin\
-     assets\
-   ```
-
-2. Edit **`C:\xampp\htdocs\wowsite\config.php`**:
-   ```php
-   // DBs
-   $host = "localhost";
-   $user = "webuser";       // or root for local dev
-   $pass = "YOUR_DB_PASS";
-   $auth_db = "auth";
-   $characters_db = "characters";
-
-   // SOAP (optional in‑game mail delivery)
-   $soap_enabled = true;
-   $soap_host   = "127.0.0.1";
-   $soap_port   = 7878;
-   $soap_user   = "GM_ACCOUNT_NAME";
-   $soap_pass   = "GM_ACCOUNT_PASSWORD";
-   ```
-
-3. Browse to **http://localhost/wowsite/** and verify the home page renders.
-
----
-
-## 5) Download Page Wiring
-
-The **Connect/Downloads** page lives at `/pages/download_and_connect.php` and automatically reads
-`realmlist` from `site_settings`. To surface downloads:
-
-1. Create a folder: **`C:\xampp\htdocs\wowsite\downloads\`**
-2. Drop your files there (e.g., `wotlk_335a_win.zip`, `Config.wtf`, etc.).
-3. Optionally add checksum files next to each artifact:
-   - `file.zip.sha256` or `file.zip.sha1`
-
-The page is already pointed at **`../downloads`** relative to `/pages/` and will show a friendly
-warning if the folder is missing.
-
----
-
-## 6) Admin Panel (optional)
-
-- URL: `http://localhost/wowsite/pages/admin.php`  
-- Auth: The panel piggybacks on your site’s session and uses the game DB to confirm GM access
-  (`account_access`). Make sure your logged‑in account has GM rights if the panel enforces admin checks.
-- From the panel you can adjust:
-  - **Coins per interval** and **interval minutes**
-  - **Anti‑AFK** requirement
-  - **Min seconds per character**
-  - **SOAP enabled**
-
-> The panel uses simple tables: `site_settings` (guide above) and `admin_settings` (from `/admin/schema.sql`).
-
----
-
-## 7) Playtime Awards Cron
-
-The script is `C:\xampp\htdocs\wowsite\cron\award_playtime.php`. It:
-- Tallies `characters.totaltime` per account
-- Tracks **last_totaltime** and **last_seen_online_at** (in `auth.playtime_rewards`, auto‑created)
-- Adds coins to `auth.account.cash`
-- Optional **online credit** (per-run cap) and AFK detection
-
-### 7.1 Test run manually
-
-Open **Command Prompt** (Run as Administrator) and run:
-
-```bat
-"C:\xampp\php\php.exe" "C:\xampp\htdocs\wowsite\cron\award_playtime.php" --verbose --dry-run
-```
-
-Common flags:
-- `--verbose`         show details
-- `--dry-run`         compute without writing
-- `--cap=10`          cap online minutes credited per run
-- `--minutes=10`      treat delta as 10 minutes (for testing)
-
-If you see DB auth/characters connection errors, recheck `config.php`.  
-If you see **“This app can’t run on your PC”** or **Access Denied**, verify the path to `php.exe`
-and run the shell **as Administrator**.
-
-### 7.2 Schedule it (Task Scheduler)
-
-1. Open **Task Scheduler** → **Create Task…**
-2. **General**: Run whether user is logged on or not; Run with highest privileges.
-3. **Triggers**: New → Begin the task: On a schedule → **Daily, repeat every 5 minutes** for a day (or your cadence).
-4. **Actions**: Start a program:
-   - Program/script: `C:\xampp\php\php.exe`
-   - Add arguments: `"C:\xampp\htdocs\wowsite\cron\award_playtime.php" --verbose`
-5. Save; enter credentials if prompted.
-
-### 7.3 Resetting/Reseeding
-
-To wipe coins and playtime state cleanly (use with care):
-
-```sql
--- Reset coin balances
-UPDATE auth.account SET cash = 0 WHERE id > 0;
-
--- Reset the tracker the script uses
-TRUNCATE TABLE auth.playtime_rewards;
-```
-
-> If phpMyAdmin blocks the update with **Error 1175 (safe update mode)**, either add a key‑based WHERE
-> (`WHERE id BETWEEN 1 AND 999999`) or temporarily disable safe updates in phpMyAdmin preferences.
-
----
-
-## 8) Enable SOAP on the Game Server (optional)
-
-In your `worldserver.conf` (or equivalent):
-- Enable SOAP
-- Bind to the host that the web server can reach (often `127.0.0.1:7878` on the same box)
-- Create a GM account with SOAP permission and set those creds in `config.php`
-
-Test connectivity from PHP:
+Open **`wowsite/config.php`** and set:
 
 ```php
-$client = new SoapClient(null, [
-  'location' => "http://127.0.0.1:7878/",
-  'uri'      => "urn:TC",
-  'login'    => "GM_ACCOUNT_NAME",
-  'password' => "GM_ACCOUNT_PASSWORD",
-]);
+$host = "localhost";    // DB host
+$user = "root";         // DB user
+$pass = "ascent";       // DB password
+$auth_db = "auth";      // or your auth DB name
+$characters_db = "characters"; // characters DB name
+// world DB is hardcoded to "world" in this build; change if needed
 ```
 
-If this fails, check firewall rules and that the worldserver SOAP listener is up.
+If you will use SOAP (in-game deliveries/admin tools):
 
----
-
-## 9) Production Hardening
-
-- Change **all default passwords** (MySQL, admin logins, SOAP).
-- In `php.ini`: `display_errors=Off`, `expose_php=Off`.
-- Force HTTPS on your domain; if fronted by **Nginx Proxy Manager**:
-  - New Proxy Host → Domain → Forward to your web host (e.g., `http://LAN_IP:80`)
-  - Enable **Websockets** (if needed) and **Force SSL**; request a Let’s Encrypt certificate.
-- Lock down **/pages/admin.php** to trusted IPs or require login.
-- Keep regular **database backups** (see below).
-
----
-
-## 10) Backups
-
-**Database (daily rotating 7 copies):** create `backup-db.bat`:
-```bat
-@echo off
-set DATESTAMP=%DATE:~-4%%DATE:~4,2%%DATE:~7,2%
-"C:\xampp\mysql\bin\mysqldump.exe" -u webuser -pYOUR_DB_PASS auth > C:\backups\auth_%DATESTAMP%.sql
-"C:\xampp\mysql\bin\mysqldump.exe" -u webuser -pYOUR_DB_PASS characters > C:\backups\characters_%DATESTAMP%.sql
+```php
+$soap_host = "127.0.0.1"; // worldserver SOAP host
+$soap_port = 7878;         // matches worldserver.conf
+$soap_user = "GMUSER";    // GM account username
+$soap_pass = "GMPASS";    // GM account password
 ```
 
-Schedule it daily in Task Scheduler. Use an encrypted drive or offsite sync for safety.
+> In `worldserver.conf` enable SOAP (examples):
+
+```
+SOAP.Enabled = 1
+SOAP.IP = 0.0.0.0
+SOAP.Port = 7878
+```
+
+Give your GM account permission (Trinity-style): `account set gmlevel GMUSER 3 -1`.
 
 ---
 
-## 11) Troubleshooting Quick Hits
+## 4) Database preparation (SQL you’ll run once)
 
-- **Cannot update `auth.account.cash`:**
-  - Ensure the column exists in your core and your MySQL user has `UPDATE` on `auth.account`.
-  - Error 1175 → disable safe updates or use a key-based WHERE.
+The site creates **some** tables automatically, but a few **must be created** or **altered** first. Run these against your **`auth`** DB unless stated otherwise.
 
-- **“Unknown column 'item_entry'” (shop or custom scripts):**
-  - Align your shop schema with your core’s item table (`item_template` vs `item_instance` etc.).
+### 4.1 Currency column on accounts (required)
 
-- **Admin page says “You must be logged in.”**
-  - Confirm your site’s session/login is working and the account is GM if required.
-
-- **Downloads page shows missing folder warning:**
-  - Create `C:\xampp\htdocs\wowsite\downloads\` and place files. Optionally include `.sha256` files.
-
----
-
-## 12) Go‑Live Checklist
-
-- [ ] `config.php` has correct DB + SOAP credentials
-- [ ] `site_settings` seeded (realmlist, interval/coins)
-- [ ] `/downloads` populated
-- [ ] `admin/schema.sql` imported to `auth`
-- [ ] Cron scheduled and test run successful
-- [ ] SSL + reverse proxy (if applicable)
-- [ ] Backups scheduled
-
----
-
-### Appendix A — Minimal SQL You May Need Again
+The shop uses an account balance called **cash**.
 
 ```sql
--- site_settings (key/value)
-CREATE TABLE IF NOT EXISTS site_settings (
-  `key`   VARCHAR(64) PRIMARY KEY,
-  `value` VARCHAR(255) NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-              ON UPDATE CURRENT_TIMESTAMP
+ALTER TABLE `account`
+  ADD COLUMN `cash` DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER `email`;
+```
+
+### 4.2 Settings & logs
+
+**The Admin UI will create `site_settings` and `activity_log` if they don’t exist**, but it’s safe to create them up front:
+
+```sql
+CREATE TABLE IF NOT EXISTS `site_settings` (
+  `key`   VARCHAR(64) NOT NULL PRIMARY KEY,
+  `value` VARCHAR(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- admin_settings (from /admin/schema.sql)
-CREATE TABLE IF NOT EXISTS admin_settings (
-  `key` VARCHAR(64) PRIMARY KEY,
-  `value` VARCHAR(255) NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-              ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- playtime tracker (auto-created by the cron in auth DB, included here for reference)
-CREATE TABLE IF NOT EXISTS playtime_rewards (
-  account_id            INT UNSIGNED PRIMARY KEY,
-  last_totaltime        BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  last_award_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  last_seen_online_at   TIMESTAMP NULL DEFAULT NULL
+CREATE TABLE IF NOT EXISTS `activity_log` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `account_id` INT UNSIGNED NOT NULL,
+  `username` VARCHAR(32) NOT NULL,
+  `action` VARCHAR(64) NOT NULL,
+  `details` VARCHAR(255) DEFAULT NULL,
+  `ip_address` VARCHAR(64) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-Good luck, and enjoy the smooth spin‑up!
+### 4.3 Login logs (used by `pages/login.php`)
+
+```sql
+CREATE TABLE IF NOT EXISTS `login_logs` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `account_id` INT UNSIGNED NOT NULL,
+  `username` VARCHAR(32) NOT NULL,
+  `ip` VARCHAR(64) NOT NULL,
+  `action` VARCHAR(16) NOT NULL,
+  `result` VARCHAR(16) NOT NULL,
+  `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+### 4.4 Transaction history (used by shop purchase logs)
+
+```sql
+CREATE TABLE IF NOT EXISTS `pay_history` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `account_id` INT UNSIGNED NOT NULL,
+  `orderNo` VARCHAR(64) NOT NULL,
+  `synType` VARCHAR(32) NOT NULL,
+  `status` VARCHAR(16) NOT NULL,
+  `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `cpparam` VARCHAR(255) DEFAULT NULL,
+  `username` VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+### 4.5 Web shop tables (created on demand by Admin ▸ Shop Items)
+
+```sql
+CREATE TABLE IF NOT EXISTS `shop_categories` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(100) NOT NULL UNIQUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `shop_items` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `item_entry` INT NOT NULL,
+  `name` VARCHAR(120) NOT NULL,
+  `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `stack` INT NOT NULL DEFAULT 1,
+  `category_id` INT DEFAULT NULL,
+  CONSTRAINT `fk_shop_category` FOREIGN KEY (`category_id`) REFERENCES `shop_categories`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+### 4.6 Playtime tracker (auto-created by cron; safe to create now)
+
+```sql
+CREATE TABLE IF NOT EXISTS `playtime_rewards` (
+  `account_id` INT UNSIGNED PRIMARY KEY,
+  `last_seen_online_at` TIMESTAMP NULL DEFAULT NULL,
+  `last_xp` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `last_level` INT UNSIGNED NOT NULL DEFAULT 0,
+  `last_map` INT UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+### 4.7 Realm address (used by Download & Connect page)
+
+Make sure the **auth** DB has your realm address so the site can auto-detect it:
+
+```sql
+UPDATE `realmlist` SET `address` = 'YOUR.SERVER.IP.OR.HOST' LIMIT 1;
+```
+
+> **Characters/world schemas:** Standard Emucoach/Trinity tables are expected (e.g., `characters.characters` with columns `guid`, `account`, `name`, `online`, `level`, `totalXP`, `map`; `characters.mail`, `characters.item_instance`, `characters.mail_items`, etc.).
+
+---
+
+## 5) First run
+
+1. Browse to `http://localhost/wowsite/`.
+2. Use **Register** to create a player account, or use an existing one from your DB.
+3. **Login**. If your account has GM rights (`account_access` gmlevel ≥ 3), you’ll see the **Admin** link.
+4. In **Admin ▸ Server Settings**:
+
+   * Add or edit keys used by the site/cron (examples):
+
+     * `soap_enabled` → `1` (if you want SOAP for in-game mail)
+     * `interval_minutes` → `10`
+     * `coins_per_interval` → `1`
+     * `min_minutes` → `1`
+     * `online_per_run_cap` → `5`
+     * `require_activity` → `0` or `1`
+     * Optional SOAP keys used by the cron/email: `soap_host`, `soap_port`, `soap_user`, `soap_pass`, `soap_from`, `soap_subject`, `soap_body_tpl`
+5. In **Admin ▸ Shop Items**, create categories and items (item IDs are MoP itemEntry IDs). Prices deduct from `account.cash`.
+6. Test delivery via **Admin ▸ Tools ▸ SOAP Tester**. Example commands:
+
+   * `server info`
+   * `account list`
+   * `send mail <CharName> "Subject" "Body" 6948:1` (Hearthstone example)
+
+---
+
+## 6) Playtime rewards (cron)
+
+The cron awards coins for time online using `characters.online`, configurable in **Admin ▸ Playtime Rewards** (settings are stored in `auth.site_settings`).
+
+### Windows (Task Scheduler)
+
+* **Program:** `C:\xampp\php\php.exe`
+* **Args:** `C:\xampp\htdocs\wowsite\cron\award_playtime.php --verbose`
+* **Start in:** `C:\xampp\htdocs\wowsite\cron`
+* **Trigger:** Every 5 minutes (recommended)
+
+### Linux (crontab)
+
+```cron
+*/5 * * * * php /var/www/html/wowsite/cron/award_playtime.php --verbose >> /var/log/wowsite_awards.log 2>&1
+```
+
+> The script writes a fresh `cron/award_debug.log` each run. It also **auto-creates** `auth.playtime_rewards` if missing.
+
+**Anti‑AFK (optional):** enable `require_activity` in settings. The script uses `totalXP`, `level`, and `map` deltas to decide if a session is active.
+
+**SOAP vs DB‑mail:** If SOAP is enabled, awards are optionally mailed in‑game. If SOAP is disabled or fails, the site’s delivery helper can fall back to writing a mail directly into the characters DB (`mail`, `item_instance`, `mail_items`).
+
+---
+
+## 7) Downloads & checksums (optional)
+
+Place client archives in **`wowsite/downloads/`**. The *Download & Install* page auto-detects file size and an optional **SHA‑256** sidecar file named like `<filename>.sha256`.
+
+### Create a checksum
+
+**Windows (PowerShell or CMD):**
+
+```bat
+CertUtil -hashfile "C:\xampp\htdocs\wowsite\downloads\World of Warcraft 5.4.8.rar" SHA256 > "C:\xampp\htdocs\wowsite\downloads\World of Warcraft 5.4.8.rar.sha256"
+```
+
+**Linux/macOS:**
+
+```bash
+sha256sum "/var/www/html/wowsite/downloads/World of Warcraft 5.4.8.rar" > \
+  "/var/www/html/wowsite/downloads/World of Warcraft 5.4.8.rar.sha256"
+```
+
+> Filenames with spaces are fine—just quote the paths. The sidecar file must end with **`.rar.sha256`** (match your exact archive name + `.sha256`).
+
+---
+
+## 8) Troubleshooting
+
+**DB connection error (target machine actively refused it)**
+
+* MySQL/MariaDB not running, wrong host/port, or wrong credentials in `config.php`.
+
+**Admin link doesn’t appear**
+
+* Your account needs gmlevel ≥ 3 in `auth.account_access`.
+
+**SOAP: “disabled” or timeouts**
+
+* Set `soap_enabled = 1` in **Server Settings**; verify worldserver SOAP settings; make sure `php_soap` is enabled; firewall permits port **7878**.
+
+**Deliveries not arriving**
+
+* If using SOAP, test with **Admin ▸ Tools ▸ SOAP Tester**. For DB‑mail fallback, ensure the standard Trinity tables exist and the character is **offline** when writing `mail`.
+
+**Download & Connect shows `127.0.0.1`**
+
+* Update `auth.realmlist.address` with your public IP or hostname.
+
+---
+
+## 9) Security & hardening (quick notes)
+
+* Keep `config.php` outside public git or secure it properly.
+* Restrict Admin access at the webserver and rely on in‑app GM check (`account_access`).
+* If you expose SOAP publicly, IP‑restrict access in firewall/reverse proxy.
+* Consider HTTPS on your web host.
+
+---
+
+## 10) File-by-file pointers
+
+* **`config.php`** — DB connections, SOAP config, delivery helpers, race/class/gender maps, shop helpers.
+* **`pages/admin.php`** — Admin shell; ensures `site_settings` and `activity_log` exist.
+* **`pages/admin/server_setting.php`** — UI to add/update keys in `site_settings`.
+* **`pages/admin/shop_items.php`** — Manages `shop_categories`/`shop_items` (creates tables if missing).
+* **`pages/admin/tools.php`** — Links for SOAP tester and the playtime cron.
+* **`pages/admin/soap.php`** — SOAP test page.
+* **`cron/award_playtime.php`** — Awards coins; uses `site_settings`; creates `playtime_rewards` if missing.
+* **`pages/shop.php`** — Web shop, deducts from `account.cash`, delivers via SOAP or DB‑mail.
+* **`pages/download_and_connect.php`** — Lists files in `downloads/` and shows checksum; auto‑reads realm IP from `auth.realmlist`.
+
+---
+
+## 11) Quick sanity checklist
+
+* [ ] `config.php` DB creds correct
+* [ ] `auth.account.cash` exists and non‑negative
+* [ ] `site_settings`, `activity_log`, `login_logs`, `pay_history` present
+* [ ] SOAP enabled and tested (optional)
+* [ ] Playtime cron scheduled (optional)
+* [ ] `downloads/` populated and checksums added (optional)
+
+If you need this tailored to your exact DB names or a custom in‑game currency, note the details and we’ll provide a patched `config.php`/pages.
