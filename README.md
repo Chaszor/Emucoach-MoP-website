@@ -1,6 +1,6 @@
 # Emucoach MoP Website — README & Fresh Install Guide
 
-This README explains how to deploy the **`wowsite/` website** in this ZIP on a **fresh Emucoach Mists of Pandaria (5.4.8) server**. It covers prerequisites, database prep, configuration, optional features (playtime rewards), and troubleshooting.
+This README explains how to deploy the **website** in this ZIP on a **fresh Emucoach Mists of Pandaria (5.4.8) server**. It covers prerequisites, database prep, configuration, optional features (playtime rewards), and troubleshooting.
 
 Check out my [project website](https://wow.extremisgaming.com) while it is online.
 
@@ -9,7 +9,7 @@ Check out my [project website](https://wow.extremisgaming.com) while it is onlin
 ## What’s included (high level)
 
 ```
-wowsite/
+htdocs/
   assets/                  CSS
   config.php               Main config (DB + SOAP + helpers)
   cron/                    award_playtime.php + log
@@ -43,12 +43,12 @@ wowsite/
 
 ## 2) Deploy the website
 
-1. Extract the zip and copy the **`wowsite/`** folder to your web root.
+1. Extract the zip and copy the folders to your web root.
 
-   * **Windows (XAMPP):** `C:\xampp\htdocs\wowsite`
-   * **Linux (Apache):** `/var/www/html/wowsite`
-2. Ensure the webserver user can read `wowsite/`, and that `wowsite/cron/award_debug.log` is writable (the cron script overwrites the file per run).
-3. (Optional) Put client files in **`wowsite/downloads/`** (used by *Download & Install* page).
+   * **Windows (XAMPP):** `C:\xampp\htdocs\`
+   * **Linux (Apache):** `/var/www/html/`
+2. Ensure the webserver user can read `htdocs/`, and that `htdocs/cron/award_debug.log` is writable (the cron script overwrites the file per run).
+3. (Optional) Put client files in **`htdocs/downloads/`** (used by *Download & Install* page).
 
 ---
 
@@ -195,7 +195,7 @@ UPDATE `realmlist` SET `address` = 'YOUR.SERVER.IP.OR.HOST' LIMIT 1;
 
 ## 5) First run
 
-1. Browse to `http://localhost/wowsite/`.
+1. Browse to `http://localhost/`.
 2. Use **Register** to create a player account, or use an existing one from your DB.
 3. **Login**. If your account has GM rights (`account_access` gmlevel ≥ 3), you’ll see the **Admin** link.
 4. In **Admin ▸ Server Settings**:
@@ -225,14 +225,14 @@ The cron awards coins for time online using `characters.online`, configurable in
 ### Windows (Task Scheduler)
 
 * **Program:** `C:\xampp\php\php.exe`
-* **Args:** `C:\xampp\htdocs\wowsite\cron\award_playtime.php --verbose`
-* **Start in:** `C:\xampp\htdocs\wowsite\cron`
+* **Args:** `C:\xampp\htdocs\cron\award_playtime.php --verbose`
+* **Start in:** `C:\xampp\htdocs\cron`
 * **Trigger:** Every 5 minutes (recommended)
 
 ### Linux (crontab)
 
 ```cron
-*/5 * * * * php /var/www/html/wowsite/cron/award_playtime.php --verbose >> /var/log/wowsite_awards.log 2>&1
+*/5 * * * * php /var/www/html/cron/award_playtime.php --verbose >> /var/log/wowsite_awards.log 2>&1
 ```
 
 > The script writes a fresh `cron/award_debug.log` each run. It also **auto-creates** `auth.playtime_rewards` if missing.
@@ -245,21 +245,21 @@ The cron awards coins for time online using `characters.online`, configurable in
 
 ## 7) Downloads & checksums (optional)
 
-Place client archives in **`wowsite/downloads/`**. The *Download & Install* page auto-detects file size and an optional **SHA‑256** sidecar file named like `<filename>.sha256`.
+Place client archives in **`htdocs/downloads/`**. The *Download & Install* page auto-detects file size and an optional **SHA‑256** sidecar file named like `<filename>.sha256`.
 
 ### Create a checksum
 
 **Windows (PowerShell or CMD):**
 
 ```bat
-CertUtil -hashfile "C:\xampp\htdocs\wowsite\downloads\World of Warcraft 5.4.8.rar" SHA256 > "C:\xampp\htdocs\wowsite\downloads\World of Warcraft 5.4.8.rar.sha256"
+CertUtil -hashfile "C:\xampp\htdocs\downloads\World of Warcraft 5.4.8.rar" SHA256 > "C:\xampp\htdocs\downloads\World of Warcraft 5.4.8.rar.sha256"
 ```
 
 **Linux/macOS:**
 
 ```bash
-sha256sum "/var/www/html/wowsite/downloads/World of Warcraft 5.4.8.rar" > \
-  "/var/www/html/wowsite/downloads/World of Warcraft 5.4.8.rar.sha256"
+sha256sum "/var/www/html/downloads/World of Warcraft 5.4.8.rar" > \
+  "/var/www/html/downloads/World of Warcraft 5.4.8.rar.sha256"
 ```
 
 > Filenames with spaces are fine—just quote the paths. The sidecar file must end with **`.rar.sha256`** (match your exact archive name + `.sha256`).
