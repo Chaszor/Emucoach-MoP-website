@@ -2,7 +2,7 @@
 
 This README explains how to deploy the **`wowsite/` website** in this ZIP on a **fresh Emucoach Mists of Pandaria (5.4.8) server**. It covers prerequisites, database prep, configuration, optional features (playtime rewards), and troubleshooting.
 
-Check out my [project website](https://extremisgaming.com) while it is online.
+Check out my [project website](https://wow.extremisgaming.com) while it is online.
 
 ---
 
