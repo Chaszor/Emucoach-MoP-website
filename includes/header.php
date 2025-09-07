@@ -40,7 +40,7 @@ $isGM = $isLoggedIn ? user_is_gm($auth_conn ?? null, (int)$_SESSION["account_id"
     colorLinks: true,
     iconizeLinks: true,
     renameLinks: true,
-    domain: 'mop-classic',  // use 'wow' for retail, 'tbc' for TBC Classic, 'wotlk' for WotLK Classic
+    domain: 'mop-classic',
     iconSize: 'medium'
   };
 </script>

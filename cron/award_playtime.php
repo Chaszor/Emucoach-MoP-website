@@ -121,7 +121,11 @@ $award['online_credit']['per_run_cap'] = max(
 $award['anti_afk']['enabled'] = get_boolish($auth, 'require_activity', $award['anti_afk']['enabled']);
 
 // SOAP
-$soap['enabled'] = get_boolish($auth, 'soap_enabled', $soap['enabled']);
+// Keep global SOAP connectivity values as-is (host/port/user/pass)
+$soap['enabled'] = get_boolish($auth, 'soap_enabled', $soap['enabled']); // global on/off for SOAP availability
+$soap['mail_enabled'] = get_boolish($auth, 'playtime_mail_enabled', true); 
+// NEW: per-feature toggle for playtime mail only (default true or false as you prefer)
+$soap['mail_enabled'] = get_boolish($auth, 'playtime_mail_enabled', true);
 $soapHost = get_setting($auth, 'soap_host', null);    if ($soapHost !== null) $soap['host'] = $soapHost;
 $soapPort = get_setting($auth, 'soap_port', null);    if ($soapPort !== null) $soap['port'] = (int)$soapPort;
 $soapUser = get_setting($auth, 'soap_user', null);    if ($soapUser !== null) $soap['user'] = $soapUser;
@@ -132,7 +136,7 @@ $soapBody = get_setting($auth, 'soap_body_tpl', null);if ($soapBody !== null) $s
 
 /** ====== HELPERS ====== */
 function sendSoapMail($soap, $playerName, $subject, $body) {
-  if (!$soap['enabled']) return true;
+  if (!$soap['enabled'] && !$soap['mail_enabled']) return true;
   $xml = sprintf(
     '<?xml version="1.0" encoding="utf-8"?>' .
     '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">' .
@@ -282,11 +286,10 @@ if ($getOnlineChars->execute()) {
         error_log("[award_playtime] " . $e->getMessage());
         continue;
       }
-
-      if ($soap['enabled']) {
-        $body = sprintf($soap['body_tpl'], $coins);
-        $ok = sendSoapMail($soap, $charName, $soap['subject'], $body);
-        log_line("SOAP mail to {$charName} " . ($ok ? "succeeded" : "FAILED"), $VERBOSE);
+      if ($soap['mail_enabled']) {
+          $body = sprintf($soap['body_tpl'], $coins);
+          $ok = sendSoapMail($soap, $charName, $soap['subject'], $body);
+          log_line("SOAP mail to {$charName} " . ($ok ? "succeeded" : "FAILED"), $VERBOSE);
       }
     }
     log_line("[acct $accountId] Awarded $coins coin(s) for $minutes minutes", $VERBOSE);

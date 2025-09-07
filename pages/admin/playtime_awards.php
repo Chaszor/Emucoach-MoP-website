@@ -38,6 +38,10 @@
       <input type="checkbox" name="soap_enabled" <?php echo $soap_enabled ? 'checked' : ''; ?>>
       Enable SOAP in-game mail on award
     </label>
+    <label>
+      <input type="checkbox" name="playtime_mail_enabled" <?= $playtime_mail_enabled ? 'checked' : '' ?>>
+      Send SOAP mail for playtime awards
+    </label>
 
     <br><br>
     <button type="submit" class="btn">Save Settings</button>

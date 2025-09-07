@@ -11,8 +11,6 @@ if (!isset($_SESSION["username"]) || !isset($_SESSION["account_id"])) {
     exit;
 }
 
-
-
 $account_id = (int)$_SESSION["account_id"];
 $username   = $_SESSION["username"] ?? "unknown";
 
@@ -22,17 +20,16 @@ if (!is_admin($auth_conn, $account_id)) {
     exit;
 }
 
-// --- ensure site_settings table exists ---
+/* ---------- Ensure tables exist ---------- */
 $auth_conn->query("
 CREATE TABLE IF NOT EXISTS site_settings (
-    `key`       VARCHAR(64) PRIMARY KEY,
-    `value`     VARCHAR(255) NOT NULL,
+    `key`        VARCHAR(64) PRIMARY KEY,
+    `value`      VARCHAR(255) NOT NULL,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                  ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ");
 
-// --- ensure activity_log table exists ---
 $auth_conn->query("
 CREATE TABLE IF NOT EXISTS activity_log (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -46,9 +43,10 @@ CREATE TABLE IF NOT EXISTS activity_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ");
 
-// --- helpers for site settings ---
-function get_setting($auth_conn, $key, $default=null) {
+/* ---------- Helpers ---------- */
+function get_setting(mysqli $auth_conn, string $key, $default = null) {
     $stmt = $auth_conn->prepare("SELECT value FROM site_settings WHERE `key`=?");
+    if (!$stmt) return $default;
     $stmt->bind_param("s", $key);
     $stmt->execute();
     $stmt->bind_result($v);
@@ -56,7 +54,8 @@ function get_setting($auth_conn, $key, $default=null) {
     $stmt->close();
     return $has ? $v : $default;
 }
-function set_setting($auth_conn, $key, $value) {
+
+function set_setting(mysqli $auth_conn, string $key, $value): void {
     $stmt = $auth_conn->prepare("
         INSERT INTO site_settings (`key`,`value`)
         VALUES (?,?)
@@ -68,7 +67,6 @@ function set_setting($auth_conn, $key, $value) {
     $stmt->close();
 }
 
-// --- helper for activity logging ---
 function log_activity(mysqli $auth_conn, int $account_id, string $username, string $action): void {
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     $stmt = $auth_conn->prepare("
@@ -80,58 +78,64 @@ function log_activity(mysqli $auth_conn, int $account_id, string $username, stri
     $stmt->close();
 }
 
-
-// defaults aligned with cron/award_playtime.php
+/* ---------- Defaults (aligned with award_playtime.php) ---------- */
 $defaults = [
-  "interval_minutes"      => "10",
-  "coins_per_interval"    => "1",
-  "min_minutes"           => "1",
-  "online_per_run_cap"    => "5",
-  "require_activity"      => "0",
-  "min_seconds_per_char"  => "900",
-  "soap_enabled"          => "0",
+    "interval_minutes"       => "10",
+    "coins_per_interval"     => "1",
+    "min_minutes"            => "1",
+    "online_per_run_cap"     => "5",
+    "require_activity"       => "0",
+    "min_seconds_per_char"   => "900",
+    // New: per-feature toggle for playtime award SOAP mail only
+    "playtime_mail_enabled"  => "0",
+    // Global SOAP availability (read-only here; shown if needed)
+    "soap_enabled"           => "0",
 ];
 
-// --- handle POST only for settings form ---
+/* ---------- Handle POST (settings form only) ---------- */
 $msg = "";
-if ($_SERVER["REQUEST_METHOD"] === "POST" 
-    && isset($_POST['settings_action']) 
-    && $_POST['settings_action'] === 'save_settings') {
-
+if (
+    $_SERVER["REQUEST_METHOD"] === "POST" &&
+    isset($_POST['settings_action']) &&
+    $_POST['settings_action'] === 'save_settings'
+) {
     $interval   = max(1, (int)($_POST["interval_minutes"] ?? $defaults["interval_minutes"]));
     $coins      = max(0, (int)($_POST["coins_per_interval"] ?? $defaults["coins_per_interval"]));
     $minmins    = max(1, (int)($_POST["min_minutes"] ?? $defaults["min_minutes"]));
     $cap        = max(1, (int)($_POST["online_per_run_cap"] ?? $defaults["online_per_run_cap"]));
     $require    = isset($_POST["require_activity"]) ? 1 : 0;
     $minsecs    = max(0, (int)($_POST["min_seconds_per_char"] ?? $defaults["min_seconds_per_char"]));
-    $soap       = isset($_POST["soap_enabled"]) ? 1 : 0;
-
-    set_setting($auth_conn, "interval_minutes",      $interval);
-    set_setting($auth_conn, "coins_per_interval",    $coins);
-    set_setting($auth_conn, "min_minutes",           $minmins);
-    set_setting($auth_conn, "online_per_run_cap",    $cap);
-    set_setting($auth_conn, "require_activity",      $require);
-    set_setting($auth_conn, "min_seconds_per_char",  $minsecs);
-    set_setting($auth_conn, "soap_enabled",          $soap);
-
+    // Per-feature toggle (do NOT write soap_enabled here)
+    $playtimeMail = isset($_POST["playtime_mail_enabled"]) ? 1 : 0;
+    // Global SOAP availability is read-only here; do not change it
+    $soapEnabled = isset($_POST["soap_enabled"]) ? 1 : 0; // read-only
+    set_setting($auth_conn, "interval_minutes",       $interval);
+    set_setting($auth_conn, "coins_per_interval",     $coins);
+    set_setting($auth_conn, "min_minutes",            $minmins);
+    set_setting($auth_conn, "online_per_run_cap",     $cap);
+    set_setting($auth_conn, "require_activity",       $require);
+    set_setting($auth_conn, "min_seconds_per_char",   $minsecs);
+    set_setting($auth_conn, "playtime_mail_enabled",  $playtimeMail);
+    set_setting($auth_conn, "soap_enabled",           $soapEnabled); // read-only
     $msg = "Settings saved.";
     log_activity($auth_conn, $account_id, $username, "Updated site settings");
 }
 
-// --- read current ---
-$interval_minutes       = (int)get_setting($auth_conn, "interval_minutes",      $defaults["interval_minutes"]);
-$coins_per_interval     = (int)get_setting($auth_conn, "coins_per_interval",    $defaults["coins_per_interval"]);
-$min_minutes            = (int)get_setting($auth_conn, "min_minutes",           $defaults["min_minutes"]);
-$online_per_run_cap     = (int)get_setting($auth_conn, "online_per_run_cap",    $defaults["online_per_run_cap"]);
-$require_activity       = (int)get_setting($auth_conn, "require_activity",      $defaults["require_activity"]);
-$min_seconds_per_char   = (int)get_setting($auth_conn, "min_seconds_per_char",  $defaults["min_seconds_per_char"]);
-$soap_enabled           = (int)get_setting($auth_conn, "soap_enabled",          $defaults["soap_enabled"]);
+/* ---------- Read current values ---------- */
+$interval_minutes       = (int)get_setting($auth_conn, "interval_minutes",       $defaults["interval_minutes"]);
+$coins_per_interval     = (int)get_setting($auth_conn, "coins_per_interval",     $defaults["coins_per_interval"]);
+$min_minutes            = (int)get_setting($auth_conn, "min_minutes",            $defaults["min_minutes"]);
+$online_per_run_cap     = (int)get_setting($auth_conn, "online_per_run_cap",     $defaults["online_per_run_cap"]);
+$require_activity       = (int)get_setting($auth_conn, "require_activity",       $defaults["require_activity"]);
+$min_seconds_per_char   = (int)get_setting($auth_conn, "min_seconds_per_char",   $defaults["min_seconds_per_char"]);
+$playtime_mail_enabled  = (int)get_setting($auth_conn, "playtime_mail_enabled",  $defaults["playtime_mail_enabled"]);
+$soap_enabled           = (int)get_setting($auth_conn, "soap_enabled",           $defaults["soap_enabled"]); // read-only
 
-// derived rates
+// Derived rates
 $coins_per_minute = $interval_minutes > 0 ? ($coins_per_interval / $interval_minutes) : 0.0;
 $coins_per_hour   = $interval_minutes > 0 ? ($coins_per_interval * (60 / $interval_minutes)) : 0.0;
 
-// --- detect active tab (default = settings) ---
+/* ---------- Active tab ---------- */
 $tab = $_GET['tab'] ?? 'settings';
 ?>
 <h2 style="text-align: center">Admin Panel</h2>
@@ -148,7 +152,14 @@ $tab = $_GET['tab'] ?? 'settings';
 </nav>
 
 <?php if ($tab === 'settings'): ?>
-  <?php include("admin/playtime_awards.php"); ?>
+  <?php
+    // The included file can use:
+    // $interval_minutes, $coins_per_interval, $min_minutes,
+    // $online_per_run_cap, $require_activity, $min_seconds_per_char,
+    // $playtime_mail_enabled, $soap_enabled (read-only),
+    // $coins_per_minute, $coins_per_hour
+    include("admin/playtime_awards.php");
+  ?>
 
 <?php elseif ($tab === 'shop'): ?>
   <?php include("admin/shop_items.php"); ?>
