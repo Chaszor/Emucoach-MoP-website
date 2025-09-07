@@ -213,3 +213,158 @@ $genders = [
     0 => "Male",
     1 => "Female"
 ];
+
+// --- helper: check GM/admin status via account_access (Trinity/MaNGOS-like) ---
+function is_admin($auth_conn, $account_id) {
+    if (!$stmt = $auth_conn->prepare("SELECT gmlevel FROM account_access WHERE id=? LIMIT 1")) {
+        return false;
+    }
+    $stmt->bind_param("i", $account_id);
+    $stmt->execute();
+    $stmt->bind_result($gm);
+    $ok = ($stmt->fetch() && (int)$gm >= 3);
+    $stmt->close();
+    return $ok;
+}
+
+/* ----------------------------- Helpers ----------------------------------- */
+
+function flash(string $type, string $msg): void {
+    $cls = $type === 'ok' ? 'ok' : 'err';
+    echo "<div class='flash {$cls}'>" . htmlspecialchars($msg) . "</div>";
+}
+
+function log_pay_history(
+    mysqli $auth_conn,
+    int $account_id,
+    string $username,
+    string $orderNo,
+    float $price,
+    string $status,
+    string $cpparam = '',
+    string $synType = 'SHOP'
+): void {
+    $stmt = $auth_conn->prepare("
+        INSERT INTO pay_history 
+            (account_id, orderNo, synType, status, price, time, cpparam, username)
+        VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)
+    ");
+    if ($stmt) {
+        $stmt->bind_param(
+            'isssdss',
+            $account_id,
+            $orderNo,
+            $synType,
+            $status,
+            $price,
+            $cpparam,
+            $username
+        );
+        if (!$stmt->execute()) {
+            echo "Insert failed: " . $stmt->error;
+        }
+        $stmt->close();
+    } else {
+        echo "SQL Error: " . $auth_conn->error;
+    }
+}
+
+
+
+
+function get_account(mysqli $auth_conn, string $username): ?array {
+    $stmt = $auth_conn->prepare("SELECT id, username, IFNULL(cash,0) AS cash FROM account WHERE username = ? LIMIT 1");
+    if (!$stmt) return null;
+    $stmt->bind_param('s', $username);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
+}
+
+function user_characters(mysqli $char_conn, int $account_id): array {
+    $stmt = $char_conn->prepare("SELECT guid, name FROM characters WHERE account = ? ORDER BY name ASC");
+    if (!$stmt) return [];
+    $stmt->bind_param('i', $account_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $out = [];
+    while ($r = $res->fetch_assoc()) $out[] = $r;
+    $stmt->close();
+    return $out;
+}
+
+function get_categories(mysqli $db): array {
+    $sql = "SELECT c.id, c.name, COUNT(i.id) AS cnt
+            FROM shop_categories c
+            LEFT JOIN shop_items i ON i.category_id = c.id
+            GROUP BY c.id, c.name
+            ORDER BY c.name";
+    $res = $db->query($sql);
+    $out = [];
+    if ($res) { while ($r = $res->fetch_assoc()) $out[] = $r; $res->close(); }
+    return $out;
+}
+
+function list_shop_items(mysqli $db, ?int $categoryId = null): array {
+    if ($categoryId) {
+        $stmt = $db->prepare("
+            SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id, c.name AS category
+            FROM shop_items i
+            LEFT JOIN shop_categories c ON c.id = i.category_id
+            WHERE i.category_id = ?
+            ORDER BY i.name ASC, i.id ASC
+        ");
+        $stmt->bind_param('i', $categoryId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+    } else {
+        $res = $db->query("
+            SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id, c.name AS category
+            FROM shop_items i
+            LEFT JOIN shop_categories c ON c.id = i.category_id
+            ORDER BY c.name ASC, i.name ASC, i.id ASC
+        ");
+    }
+    $items = [];
+    if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
+    if (isset($stmt)) $stmt->close();
+    return $items;
+}
+
+function get_shop_item_by_id(mysqli $db, int $id): ?array {
+    $stmt = $db->prepare("
+        SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack, i.category_id
+        FROM shop_items i
+        WHERE i.id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) return null;
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
+}
+
+function deliver_item(int $char_guid, string $char_name, int $item_entry, int $count): array {
+    $subject = "Thank you for your purchase";
+    $body    = "Your shop purchase has been delivered.";
+    if (function_exists('sendSoap')) {
+        $cmd = sprintf('send items %s "%s" "%s" %d:%d', $char_name, addslashes($subject), addslashes($body), $item_entry, $count);
+        [$ok, $resp] = sendSoap($cmd);
+        return [$ok, $resp];
+    }
+    if (function_exists('deliverViaDBMail')) {
+        try {
+            deliverViaDBMail($GLOBALS['char_conn'], $char_guid, $item_entry, $count, $subject, $body);
+            return [true, 'Delivered via DB mail'];
+        } catch (Throwable $e) {
+            return [false, 'DB-mail failed: ' . $e->getMessage()];
+        }
+    }
+    return [false, 'No delivery method available (SOAP/DB-mail not configured)'];
+}
+

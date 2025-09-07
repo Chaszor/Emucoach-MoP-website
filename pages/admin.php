@@ -11,18 +11,7 @@ if (!isset($_SESSION["username"]) || !isset($_SESSION["account_id"])) {
     exit;
 }
 
-// --- helper: check GM/admin status via account_access (Trinity/MaNGOS-like) ---
-function is_admin($auth_conn, $account_id) {
-    if (!$stmt = $auth_conn->prepare("SELECT gmlevel FROM account_access WHERE id=? LIMIT 1")) {
-        return false;
-    }
-    $stmt->bind_param("i", $account_id);
-    $stmt->execute();
-    $stmt->bind_result($gm);
-    $ok = ($stmt->fetch() && (int)$gm >= 3);
-    $stmt->close();
-    return $ok;
-}
+
 
 $account_id = (int)$_SESSION["account_id"];
 $username   = $_SESSION["username"] ?? "unknown";

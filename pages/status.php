@@ -3,7 +3,7 @@
 include("../includes/header.php");
 
 $server = ""; // your WoW server IP
-$port = 3724;              // auth server port (usually 3724)
+$port = 3724; // auth server port (usually 3724)
 
 $online = @fsockopen($server, $port, $errno, $errstr, 2);
 

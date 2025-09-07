@@ -1,5 +1,5 @@
 <section class="card">
-  <h2 style="text-align: center;">Playtime Rewards</h3>
+  <h2 style="text-align: center;">Playtime Rewards</h2>
   <form method="POST">
     <input type="hidden" name="settings_action" value="save_settings">
 

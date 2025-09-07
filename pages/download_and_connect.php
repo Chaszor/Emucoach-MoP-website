@@ -9,15 +9,22 @@ try {
     if (file_exists($configPath)) {
         include_once $configPath; // may define $auth_conn or site settings
     }
-    if (!$REALMLIST && isset($auth_conn)) {
-        if ($res = @$auth_conn->query("SELECT `value` FROM `site_settings` WHERE `key`='realmlist' LIMIT 1")) {
-            if ($row = $res->fetch_assoc()) $REALMLIST = trim($row['value']);
+
+    if (empty($REALMLIST) && isset($auth_conn) && $auth_conn instanceof mysqli) {
+        if ($res = @$auth_conn->query("SELECT `address` FROM `realmlist` LIMIT 1")) {
+            if ($row = $res->fetch_assoc()) {
+                $REALMLIST = trim($row['address']);
+            }
         }
     }
-} catch (Throwable $e) { /* ignore */ }
-if (!$REALMLIST || $REALMLIST === '') {
-    $REALMLIST = 'wow.extremisgaming.com'; // fallback; update to your host/IP
+} catch (Throwable $e) {
+    // optional: log $e->getMessage() if debugging
 }
+
+if (empty($REALMLIST)) {
+    $REALMLIST = '127.0.0.1'; // fallback; update to your host/IP
+}
+
 function h($s){ return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
 // -------------------- PATHS --------------------
