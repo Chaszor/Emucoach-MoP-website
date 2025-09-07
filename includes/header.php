@@ -8,8 +8,19 @@ if (session_status() === PHP_SESSION_NONE) {
  * If header.php is included before config.php somewhere, this makes it robust.
  */
 if (!isset($auth_conn) || !($auth_conn instanceof mysqli)) {
-    $cfg = __DIR__ . '/../config.php';
+    $cfg = __DIR__ . '/config.php';
     if (is_file($cfg)) require_once $cfg;
+}
+
+/** ---------- Load Server Name from realmlist ---------- */
+$server_name = "Epic WoW"; // fallback if DB fails
+if (isset($auth_conn) && $auth_conn instanceof mysqli) {
+    if ($res = $auth_conn->query("SELECT name FROM realmlist WHERE id=1 LIMIT 1")) {
+        if ($row = $res->fetch_assoc()) {
+            $server_name = $row['name'];
+        }
+        $res->close();
+    }
 }
 
 /** GM helper (Trinity/MaNGOS-like using account_access). Returns true if gmlevel >= $threshold */
@@ -32,8 +43,8 @@ $isGM = $isLoggedIn ? user_is_gm($auth_conn ?? null, (int)$_SESSION["account_id"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My WoW Server</title>
-    <link rel="stylesheet" href="/wowsite/assets/style.css">
+    <title><?php echo htmlspecialchars($server_name); ?></title>
+    <link rel="stylesheet" href="/assets/style.css">
 <script>
   // Enable icons + tooltips and target the MoP Classic database
   var whTooltips = {
@@ -49,30 +60,27 @@ $isGM = $isLoggedIn ? user_is_gm($auth_conn ?? null, (int)$_SESSION["account_id"
   /* give the icon-only link a box so it’s visible even with empty text */
   .wh-iconbox { display:inline-block; width:36px; height:36px; line-height:36px; text-align:center; }
 </style>
-
 </head>
 <body>
     <header>
-        <h1>Epic WoW</h1>
+        <h1><?php echo htmlspecialchars($server_name); ?></h1>
         <nav>
-        <a href="/wowsite/index.php">Home</a>
-        <?php if (!isset($_SESSION["username"])): ?>
-            <a href="/wowsite/pages/register.php">Register</a>
-            <a href="/wowsite/pages/login.php">Login</a>
-            
-        <?php else: ?>
-            <a href="/wowsite/pages/dashboard.php">Dashboard</a>
-            <a href="/wowsite/pages/download_and_connect.php">Download & Install</a>
-            <a href="/wowsite/pages/shop.php">Shop</a>
+            <a href="/index.php">Home</a>
+            <?php if (!isset($_SESSION["username"])): ?>
+                <a href="/pages/register.php">Register</a>
+                <a href="/pages/login.php">Login</a>
+            <?php else: ?>
+                <a href="/pages/dashboard.php">Dashboard</a>
+                <a href="/pages/download_and_connect.php">Download & Install</a>
+                <a href="/pages/shop.php">Shop</a>
 
-            <?php if ($isGM): ?>
-              <!-- Visible only to GM accounts -->
-              <a href="/wowsite/pages/admin.php">Admin</a>
+                <?php if ($isGM): ?>
+                  <!-- Visible only to GM accounts -->
+                  <a href="/pages/admin.php">Admin</a>
+                <?php endif; ?>
+                <a href="/pages/status.php">Server Status</a>
+                <a href="/pages/logout.php">Logout</a>
             <?php endif; ?>
-            <a href="/wowsite/pages/status.php">Server Status</a>
-            <a href="/wowsite/pages/logout.php">Logout</a>
-        <?php endif; ?>
-        
-    </nav>
+        </nav>
     </header>
     <main>

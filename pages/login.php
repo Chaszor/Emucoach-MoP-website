@@ -43,7 +43,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $check->close();
                 }
 
-                header("Location: " . ($is_admin ? "/wowsite/pages/admin.php" : "/wowsite/pages/dashboard.php"));
+                header("Location: " . ($is_admin ? "/pages/admin.php" : "/pages/dashboard.php"));
                 exit;
 
             } else {

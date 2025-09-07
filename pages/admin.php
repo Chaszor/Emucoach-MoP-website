@@ -136,13 +136,14 @@ $coins_per_minute = $interval_minutes > 0 ? ($coins_per_interval / $interval_min
 $coins_per_hour   = $interval_minutes > 0 ? ($coins_per_interval * (60 / $interval_minutes)) : 0.0;
 
 /* ---------- Active tab ---------- */
-$tab = $_GET['tab'] ?? 'settings';
+$tab = $_GET['tab'] ?? 'Realmlist';
 ?>
 <h2 style="text-align: center">Admin Panel</h2>
 <?php if ($msg): ?><p style="color:green"><?php echo htmlspecialchars($msg); ?></p><?php endif; ?>
 
 <nav class="admin-tabs">
-  <a href="admin.php?tab=settings"   class="<?php echo $tab === 'settings' ? 'active' : ''; ?>">Settings</a>
+  <a href="admin.php?tab=realmlist" class="<?php echo $tab === 'realmlist' ? 'active' : ''; ?>">Realmlist</a>  
+  <a href="admin.php?tab=Coin Rewards"   class="<?php echo $tab === 'Coin Rewards' ? 'active' : ''; ?>">Coin Rewards</a>
   <a href="admin.php?tab=news"       class="<?php echo $tab === 'news' ? 'active' : ''; ?>">News</a>
   <a href="admin.php?tab=shop"       class="<?php echo $tab === 'shop' ? 'active' : ''; ?>">Shop Items</a>
   <a href="admin.php?tab=tools"      class="<?php echo $tab === 'tools' ? 'active' : ''; ?>">Tools</a>
@@ -151,7 +152,7 @@ $tab = $_GET['tab'] ?? 'settings';
   <a href="admin.php?tab=logs"       class="<?php echo $tab === 'logs' ? 'active' : ''; ?>">Logs</a>
 </nav>
 
-<?php if ($tab === 'settings'): ?>
+<?php if ($tab === 'Coin Rewards'): ?>
   <?php
     // The included file can use:
     // $interval_minutes, $coins_per_interval, $min_minutes,
@@ -160,6 +161,8 @@ $tab = $_GET['tab'] ?? 'settings';
     // $coins_per_minute, $coins_per_hour
     include("admin/playtime_awards.php");
   ?>
+<?php elseif ($tab === 'realmlist'): ?>
+  <?php include("admin/realmlist.php"); ?>
 
 <?php elseif ($tab === 'shop'): ?>
   <?php include("admin/shop_items.php"); ?>
