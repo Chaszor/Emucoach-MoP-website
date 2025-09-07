@@ -319,5 +319,3 @@ sha256sum "/var/www/html/wowsite/downloads/World of Warcraft 5.4.8.rar" > \
 * [ ] SOAP enabled and tested (optional)
 * [ ] Playtime cron scheduled (optional)
 * [ ] `downloads/` populated and checksums added (optional)
-
-If you need this tailored to your exact DB names or a custom in‑game currency, note the details and we’ll provide a patched `config.php`/pages.
