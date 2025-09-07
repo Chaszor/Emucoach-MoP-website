@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
                     if ($ok) {
                         $auth_conn->commit();
                         log_pay_history($auth_conn, $account_id, $username, $orderNo, $price, 'SUCCESS', 'item=' . $entry);
-                        flash('ok', "Delivered {$item['name']} x{$stack} to {$char_name}. Deducted {$price} points.");
+                        flash('ok', "Delivered {$item['name']} x{$stack} to {$char_name}. Deducted {$price} Coins.");
                         $account = get_account($auth_conn, $username);
                         $cash    = (float)$account['cash'];
                     } else {
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
                         flash('err', $msg);
                     }
                 } else {
-                    flash('err', 'Not enough points.');
+                    flash('err', 'Not enough Coins.');
                 }
             } else {
                 flash('err', 'Invalid character selection.');
@@ -106,7 +106,7 @@ foreach ($cats as $c) {
 echo "</div>";
 
 echo "<br>";
-echo "<div style='margin-bottom:8px; font-size: 1.6em;'>Points: <b>" . number_format($cash, 0) . "</b></div>";
+echo "<div style='margin-bottom:8px; font-size: 1.6em;'>Coins: <b>" . number_format($cash, 0) . "</b></div>";
 
 $items = list_shop_items($auth_conn, $currentCatId ?: null);
 
