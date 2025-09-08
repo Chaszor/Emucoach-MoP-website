@@ -160,7 +160,7 @@ if ($selected_account > 0) {
 }
 ?>
 
-<section class="card" style="text-align: center;">
+<section class="card" style="max-width:100%; margin:auto; text-align:center;">
   <h2>Character Management</h2>
 
   <form method="get" action="admin.php" style="margin-bottom:15px;">
@@ -177,7 +177,7 @@ if ($selected_account > 0) {
   </form>
 
   <?php if ($selected_account > 0 && isset($res)): ?>
-  <table>
+  <table style="width:100%; border-collapse:collapse;">
     <thead>
       <tr>
         <th>GUID</th>

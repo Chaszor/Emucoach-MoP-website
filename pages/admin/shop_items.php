@@ -235,7 +235,7 @@ $res = $auth_conn->query("
 if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
 ?>
 
-<section class="card">
+<section class="card" style="max-width:600px; margin:auto;">
   <h2 style="text-align: center">Shop Items</h2>
   <?php if (!empty($shop_msg)): ?>
     <p style="color:<?php echo strpos($shop_msg, 'fail') !== false ? 'crimson' : 'green'; ?>;">
@@ -246,20 +246,20 @@ if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
   <!-- Add New Item -->
   <details open>
     <summary><strong>Add a new item</strong></summary>
-    <form method="POST" style="margin:.5rem 0; display:grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap:.5rem; align-items:end;">
+    <form method="POST" class="table-cards" >
       <input type="hidden" name="shop_action" value="create">
       <label>Item entry
         <input type="number" name="item_entry" min="1" required>
-      </label>
+      </label><br>
       <label>Name
         <input type="text" name="name" maxlength="120" required>
-      </label>
+      </label><br>
       <label>Price
         <input type="number" step="0.01" min="0" name="price" required>
-      </label>
+      </label><br>
       <label>Stack
         <input type="number" min="1" name="stack" value="1" required>
-      </label>
+      </label><br>
       <label>Category
         <select name="category_id" id="new_category">
           <option value="">— None —</option>
@@ -367,7 +367,7 @@ if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
   <!-- Existing Items -->
 <h3 style="margin-top:1rem; text-align: center">Existing Items</h3>
 
-<form method="POST" id="itemForm" style="margin:.5rem 0; display:grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap:.5rem; align-items:end;">
+<form method="POST" id="itemForm" class="table-cards">
   <input type="hidden" name="shop_action" value="update">
   <input type="hidden" name="id" id="item_id">
 

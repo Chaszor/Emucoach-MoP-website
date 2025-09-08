@@ -1,4 +1,4 @@
-<section class="card">
+<section class="card" style="max-width:600px; margin:auto;">
   <h2 style="text-align: center;">Playtime Rewards</h2>
   <form method="POST">
     <input type="hidden" name="settings_action" value="save_settings">
@@ -48,7 +48,7 @@
   </form>
 </section>
 
-  <section class="card">
+  <section class="card" style="max-width:600px; margin:auto;">
     <h3>Notes</h3>
     <ul>
       <li>Settings are stored in <code>auth.site_settings</code> and read by <code>cron/award_playtime.php</code>.</li>

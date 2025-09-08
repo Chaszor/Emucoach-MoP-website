@@ -1,6 +1,6 @@
-<section class="card">
+<section class="card" style="max-width:800px; margin:auto;">
   <h2 style="text-align: center;">Logs</h2>
-  <form method="POST">
+  <form method="POST" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
     <input type="hidden" name="admin_action" value="logs">
 
     <label for="log_type">Select Log</label>

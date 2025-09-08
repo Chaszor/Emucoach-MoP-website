@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $res = $auth_conn->query("SELECT id, title, content, created_at FROM news ORDER BY created_at DESC");
 ?>
 
-<section class="card">
+<section class="card" style="max-width:600px; margin:auto;">
   <h2 style="text-align: center;">News Management</h2>
 
   <!-- Add form -->
@@ -65,7 +65,7 @@ $res = $auth_conn->query("SELECT id, title, content, created_at FROM news ORDER 
     <button type="submit">Add News</button>
   </form>
 
-  <table>
+  <table class="table-cards" style="width:100%; border-collapse:collapse;">
     <thead>
       <tr>
         <th>ID</th>

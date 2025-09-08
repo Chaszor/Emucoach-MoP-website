@@ -168,7 +168,7 @@ $res = $auth_conn->query("
 ");
 ?>
 
-<section class="card">
+<section class="card" style="max-width:100%; margin:auto;">
   <h2 style="text-align: center;">Account Management</h2>
 
   <table>

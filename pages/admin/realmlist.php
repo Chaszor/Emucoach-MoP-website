@@ -138,7 +138,7 @@ $realmflags    = isset($current['realmflags']) ? (int)$current['realmflags'] : 0
 $timezone      = isset($current['timezone']) ? (int)$current['timezone'] : 0;
 ?>
 
-<section class="card">
+<section class="card" style="max-width:600px; margin:auto;">
   <h2 style="text-align:center;">Realm Configuration</h2>
 
   <!-- Realm selector -->
@@ -207,7 +207,7 @@ $timezone      = isset($current['timezone']) ? (int)$current['timezone'] : 0;
   </form>
 </section>
 
-<section class="card">
+<section class="card" style="max-width:600px; margin:auto;">
   <h3>Notes</h3>
   <ul>
     <li>Edits apply directly to <code>auth.realmlist</code>.</li>
