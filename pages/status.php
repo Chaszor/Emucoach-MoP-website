@@ -1,8 +1,10 @@
 <?php
 include("../config.php");
-include("../includes/header.php");
+include("../includes/header.php"); ?>
+<section class="container">
+<?php
 
-$server = ""; // your WoW server IP
+$server = "wow.extremisgaming.com"; // your WoW server IP
 $port = 3724;              // auth server port (usually 3724)
 
 $online = @fsockopen($server, $port, $errno, $errstr, 2);
@@ -14,22 +16,20 @@ if ($online) {
     fclose($online);
 
     // Query characters DB for online players (excluding BOT*)
-    if (isset($char_conn) && !$char_conn->connect_error) {
-        $sql = "
-            SELECT name 
-            FROM characters 
-            WHERE online = 1 
-              AND name NOT LIKE 'BOT%'";
-        $result = $char_conn->query($sql);
-
-        if ($result && $result->num_rows > 0) {
-            echo "<h3 style='text-align: center'>Online Players:</h3><ul>";
-            while ($row = $result->fetch_assoc()) {
-                echo "<li>" . htmlspecialchars($row['name']) . "</li>";
+    if (isset($char_conn) && $char_conn instanceof mysqli) {
+        $sql = "SELECT name FROM characters WHERE online = 1 AND name NOT LIKE 'BOT%'";
+        if ($res = $char_conn->query($sql)) {
+            if ($res->num_rows > 0) {
+                echo "<h3>Players Online</h3><ul>";
+                while ($row = $res->fetch_assoc()) {
+                    echo "<li>" . htmlspecialchars($row['name']) . "</li>";
+                }
+                echo "</ul>";
+            } else {
+                echo "<p>No players online right now.</p>";
             }
-            echo "</ul>";
         } else {
-            echo "<p>No players online right now.</p>";
+            echo "<p>Could not query online players.</p>";
         }
     } else {
         echo "<p style='color:red'>Could not connect to characters database.</p>";
@@ -37,6 +37,6 @@ if ($online) {
 } else {
     echo "<p style='color:red' class='hero'>Server is Offline.</p>";
 }
-
-include("../includes/footer.php");
 ?>
+</section>
+<?php include("../includes/footer.php"); ?>

@@ -1,3 +1,4 @@
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <?php
 // ===== Database Connections =====
 $host = "localhost";
@@ -68,6 +69,30 @@ function sendSoap($command) {
         error_log("SOAP error: " . $e->getMessage());
         return [false, $e->getMessage()];
     }
+}
+
+function list_subcategories(mysqli $conn, ?int $category_id = null): array {
+    if ($category_id) {
+        $stmt = $conn->prepare("SELECT id, name, category_id FROM shop_subcategories WHERE category_id = ? ORDER BY name");
+        $stmt->bind_param("i", $category_id);
+    } else {
+        $stmt = $conn->prepare("SELECT id, name, category_id FROM shop_subcategories ORDER BY category_id, name");
+    }
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $rows = $res->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
+/** Subcats grouped by category_id for quick JS population */
+function subcats_grouped_by_cat(mysqli $conn): array {
+    $rows = list_subcategories($conn, null);
+    $out = [];
+    foreach ($rows as $r) {
+        $out[(int)$r['category_id']][] = ['id' => (int)$r['id'], 'name' => $r['name']];
+    }
+    return $out;
 }
 
 

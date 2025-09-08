@@ -1,6 +1,9 @@
     </main>
-    <footer>
+    <footer class="site-footer">
+    <div class="container">
         <p>&copy; <?php echo date("Y"); ?> <?php echo htmlspecialchars($server_name); ?>. All rights reserved.</p>
-    </footer>
+    </div>
+</footer>
+
 </body>
 </html>

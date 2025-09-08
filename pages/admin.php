@@ -136,21 +136,21 @@ $coins_per_minute = $interval_minutes > 0 ? ($coins_per_interval / $interval_min
 $coins_per_hour   = $interval_minutes > 0 ? ($coins_per_interval * (60 / $interval_minutes)) : 0.0;
 
 /* ---------- Active tab ---------- */
-$tab = $_GET['tab'] ?? 'Realmlist';
+$tab = $_GET['tab'] ?? 'realmlist';
 ?>
 <h2 style="text-align: center">Admin Panel</h2>
 <?php if ($msg): ?><p style="color:green"><?php echo htmlspecialchars($msg); ?></p><?php endif; ?>
+<div style="margin:10px 0; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+  <a href="admin.php?tab=realmlist"  class="tab-link<?php echo $tab === 'realmlist' ? ' active' : ''; ?>">Realmlist</a>
+  <a href="admin.php?tab=Coin Rewards" class="tab-link<?php echo $tab === 'Coin Rewards' ? ' active' : ''; ?>">Coin Rewards</a>
+  <a href="admin.php?tab=news"       class="tab-link<?php echo $tab === 'news' ? ' active' : ''; ?>">News</a>
+  <a href="admin.php?tab=shop"       class="tab-link<?php echo $tab === 'shop' ? ' active' : ''; ?>">Shop Items</a>
+  <a href="admin.php?tab=tools"      class="tab-link<?php echo $tab === 'tools' ? ' active' : ''; ?>">Tools</a>
+  <a href="admin.php?tab=account"    class="tab-link<?php echo $tab === 'account' ? ' active' : ''; ?>">Account</a>
+  <a href="admin.php?tab=characters" class="tab-link<?php echo $tab === 'characters' ? ' active' : ''; ?>">Characters</a>
+  <a href="admin.php?tab=logs"       class="tab-link<?php echo $tab === 'logs' ? ' active' : ''; ?>">Logs</a>
+</div>
 
-<nav class="admin-tabs">
-  <a href="admin.php?tab=realmlist" class="<?php echo $tab === 'realmlist' ? 'active' : ''; ?>">Realmlist</a>  
-  <a href="admin.php?tab=Coin Rewards"   class="<?php echo $tab === 'Coin Rewards' ? 'active' : ''; ?>">Coin Rewards</a>
-  <a href="admin.php?tab=news"       class="<?php echo $tab === 'news' ? 'active' : ''; ?>">News</a>
-  <a href="admin.php?tab=shop"       class="<?php echo $tab === 'shop' ? 'active' : ''; ?>">Shop Items</a>
-  <a href="admin.php?tab=tools"      class="<?php echo $tab === 'tools' ? 'active' : ''; ?>">Tools</a>
-  <a href="admin.php?tab=account"    class="<?php echo $tab === 'account' ? 'active' : ''; ?>">Account</a>
-  <a href="admin.php?tab=characters" class="<?php echo $tab === 'characters' ? 'active' : ''; ?>">Characters</a>
-  <a href="admin.php?tab=logs"       class="<?php echo $tab === 'logs' ? 'active' : ''; ?>">Logs</a>
-</nav>
 
 <?php if ($tab === 'Coin Rewards'): ?>
   <?php
@@ -187,29 +187,27 @@ $tab = $_GET['tab'] ?? 'Realmlist';
 .card { border:1px solid #ddd; padding:1rem; margin:1rem 0; border-radius:12px; }
 label { display:block; margin:.3rem 0; }
 
-.admin-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  border-bottom: 2px solid #ccc;
-  margin: 1rem 0;
-  padding-bottom: .5rem;
-}
-.admin-tabs a {
+/* Match shop.php tab styling */
+.tab-link {
   text-decoration: none;
-  padding: .5rem 1rem;
-  border-radius: 6px 6px 0 0;
+  transition: all 0.2s ease;
+  padding: .4rem .7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, #3a3a3a);
   background: rgba(255,255,255,.04);
-  color: #2e8b57;
+  cursor: pointer;
+  color: #2e8b57;   /* sea green text */
+  display: inline-block;
+}
+.tab-link:hover {
+  background: #f5f5f5;
+  color: #226644;   /* darker green on hover */
+}
+.tab-link.active {
   font-weight: bold;
-}
-.admin-tabs a:hover {
-  background: rgba(255,255,255,.1);
-}
-.admin-tabs a.active {
+  border-color: #2e6da4;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
   background: #2e8b57;
-  border: 1px solid #ccc;
-  border-bottom: 2px solid #fff;
   color: #000;
 }
 </style>

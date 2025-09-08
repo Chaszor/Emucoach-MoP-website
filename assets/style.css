@@ -7,12 +7,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
   min-height: 100vh;
-  padding: 20px;
 }
 
 form {
@@ -20,8 +15,8 @@ form {
 }
 
 /* Structure */
-header,
-footer {
+header:not(.site-header),
+footer:not(.site-footer) {
   background: #222; /* fallback */
   background: linear-gradient(145deg, rgba(34,197,94,.12), rgba(56,189,248,.1));
   border: 1px solid var(--border);
@@ -172,4 +167,26 @@ table tbody td.actions {
   padding: .5rem;
   margin: .5rem 0;
   border-radius: 4px;
+}
+.nav-list {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: .75rem;            /* wider spacing between links */
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;        /* allows wrapping on small screens */
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: .55rem .9rem;
+  border-radius: .6rem;
+  color: var(--muted);
+  text-decoration: none;
+  line-height: 1;
+  white-space: nowrap;    /* keeps link text on one line */
+  transition: color .2s ease, background-color .2s ease, transform .08s ease;
+  outline: none;
 }

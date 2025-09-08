@@ -1,6 +1,6 @@
 <?php
 /**
- * Shop page — mysqli + SOAP delivery + categories (Approach B)
+ * Shop page — mysqli + SOAP delivery + categories + subcategories
  * No ID column in the table output.
  */
 
@@ -22,6 +22,7 @@ if (!$account) {
 }
 $account_id = (int)$account['id'];
 $cash       = (float)$account['cash'];
+
 // Force SOAP always enabled on the shop page
 $soap_enabled = true;
 
@@ -46,15 +47,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
                     $auth_conn->begin_transaction();
                     $ok = true; $msg = '';
                     $orderNo = 'ORD-' . time() . '-' . random_int(1000, 9999);
+
                     $stmt = $auth_conn->prepare("UPDATE account SET cash = cash - ? WHERE id = ? AND cash >= ?");
                     $stmt->bind_param('dii', $price, $account_id, $price);
                     $stmt->execute();
                     if ($stmt->affected_rows !== 1) { $ok = false; $msg = 'Balance update failed.'; }
                     $stmt->close();
+
                     if ($ok) {
                         [$d_ok, $d_msg] = deliver_item($char_guid, $char_name, $entry, $stack);
                         if (!$d_ok) { $ok = false; $msg = 'Delivery failed: ' . $d_msg; }
                     }
+
                     if ($ok) {
                         $auth_conn->commit();
                         log_pay_history($auth_conn, $account_id, $username, $orderNo, $price, 'SUCCESS', 'item=' . $entry);
@@ -84,17 +88,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy'])) {
 echo "<section>";
 echo "<h2 style=\"text-align: center\">Premier Shop</h2>";
 echo "</section>";
+
 $currentCatId = isset($_GET['cat']) ? (int)$_GET['cat'] : 0;
+$currentSubId = isset($_GET['sub']) ? (int)$_GET['sub'] : 0;
+
 $cats = get_categories($auth_conn);
 
 $baseUrl = strtok($_SERVER['REQUEST_URI'], '?');
+
+/* --------- Category tabs (row 1) --------- */
 echo "<div style='margin:10px 0; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;'>";
 
 // All tab
 $active = ($currentCatId === 0);
 echo "<a href='{$baseUrl}' class='tab-link" . ($active ? " active" : "") . "'>All</a>";
 
-// Category tabs
+// Category tabs (hide if empty)
 foreach ($cats as $c) {
     if ((int)$c['cnt'] === 0) continue;
     $active = ($currentCatId === (int)$c['id']);
@@ -105,10 +114,88 @@ foreach ($cats as $c) {
 }
 echo "</div>";
 
+/* --------- Subcategory tabs (row 2; only show visible/with items) --------- */
+if ($currentCatId > 0) {
+    // Load subcategories for this category (with item counts)
+    $subs = [];
+    $stmt = $auth_conn->prepare("
+        SELECT s.id, s.name, COUNT(i.id) AS cnt
+        FROM shop_subcategories s
+        LEFT JOIN shop_items i ON i.subcategory_id = s.id
+        WHERE s.category_id = ?
+        GROUP BY s.id, s.name
+        ORDER BY s.name ASC
+    ");
+    $stmt->bind_param('i', $currentCatId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($r = $res->fetch_assoc()) $subs[] = $r;
+    $stmt->close();
+
+    // Filter to only subcategories with items
+    $visibleSubs = array_values(array_filter($subs, function($s) {
+        return (int)$s['cnt'] > 0;
+    }));
+
+    if (!empty($visibleSubs)) {
+        echo "<div style='margin:6px 0 0; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;'>";
+        // "All" for the selected category
+        $active = ($currentSubId === 0);
+        echo "<a href='{$baseUrl}?cat={$currentCatId}' class='tab-link" . ($active ? " active" : "") . "'>All</a>";
+        foreach ($visibleSubs as $s) {
+            $sid = (int)$s['id'];
+            $active = ($currentSubId === $sid);
+            $sname = htmlspecialchars($s['name']);
+            $scnt  = (int)$s['cnt'];
+            echo "<a href='{$baseUrl}?cat={$currentCatId}&sub={$sid}' class='tab-link" . ($active ? " active" : "") . "'>"
+               . "{$sname} <span style='opacity:.6'>({$scnt})</span></a>";
+        }
+        echo "</div>";
+    }
+}
+
 echo "<br>";
 echo "<div style='margin-bottom:8px; font-size: 1.6em;'>Coins: <b>" . number_format($cash, 0) . "</b></div>";
 
-$items = list_shop_items($auth_conn, $currentCatId ?: null);
+/* --------- Items (filtered by category + optional subcategory) --------- */
+$items = [];
+if ($currentCatId > 0 || $currentSubId > 0) {
+    // Build filtered query that also includes category & subcategory names for display
+    $where = [];
+    $params = [];
+
+    if ($currentCatId > 0) { $where[] = "i.category_id = ?";    $params[] = $currentCatId; }
+    if ($currentSubId > 0) { $where[] = "i.subcategory_id = ?"; $params[] = $currentSubId; }
+
+    $sql = "
+        SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack,
+               c.name AS category, s.name AS subcategory
+        FROM shop_items i
+        LEFT JOIN shop_categories c    ON c.id = i.category_id
+        LEFT JOIN shop_subcategories s ON s.id = i.subcategory_id
+        " . ($where ? "WHERE " . implode(" AND ", $where) : "") . "
+        ORDER BY c.name ASC, s.name ASC, i.name ASC, i.id ASC
+    ";
+    $stmt = $auth_conn->prepare($sql);
+    if (!empty($params)) {
+        $stmt->bind_param(str_repeat('i', count($params)), ...$params);
+    }
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($r = $res->fetch_assoc()) $items[] = $r;
+    $stmt->close();
+} else {
+    // No filters: fall back to all items with category/subcategory shown
+    $res = $auth_conn->query("
+        SELECT i.id, i.item_entry, i.name, i.price, IFNULL(i.stack,1) AS stack,
+               c.name AS category, s.name AS subcategory
+        FROM shop_items i
+        LEFT JOIN shop_categories c    ON c.id = i.category_id
+        LEFT JOIN shop_subcategories s ON s.id = i.subcategory_id
+        ORDER BY c.name ASC, s.name ASC, i.name ASC, i.id ASC
+    ");
+    if ($res) { while ($r = $res->fetch_assoc()) $items[] = $r; $res->close(); }
+}
 
 if (!$items) {
     echo "<p>No items configured yet.</p>";
@@ -118,6 +205,8 @@ if (!$items) {
             <th class='sortable'>Item <span class='arrow'></span></th>
             <th class='sortable'>Price <span class='arrow'></span></th>
             <th>Stack <span class='arrow'></span></th>
+            <th>Category</th>
+            <th>Subcategory</th>
             <th>To Character</th>
           </tr>";
     foreach ($items as $row) {
@@ -134,6 +223,12 @@ if (!$items) {
         // PRICE & STACK
         echo "  <td>" . htmlspecialchars((string)$row['price']) . "</td>";
         echo "  <td>" . (int)$row['stack'] . "</td>";
+
+        // CATEGORY & SUBCATEGORY (display-only)
+        $catName = isset($row['category']) ? $row['category'] : '';
+        $subName = isset($row['subcategory']) ? $row['subcategory'] : '';
+        echo "  <td>" . htmlspecialchars((string)$catName) . "</td>";
+        echo "  <td>" . htmlspecialchars((string)$subName) . "</td>";
 
         // CHARACTER SELECT + Buy
         echo "  <td>";
@@ -169,12 +264,10 @@ th.sortable .arrow { font-size: 0.8em; opacity: 0.6; }
   color: #2e8b57;   /* sea green text */
   display: inline-block;
 }
-
 .tab-link:hover {
   background: #f5f5f5;
   color: #226644;   /* darker green on hover */
 }
-
 .tab-link.active {
   font-weight: bold;
   border-color: #2e6da4;
@@ -182,7 +275,6 @@ th.sortable .arrow { font-size: 0.8em; opacity: 0.6; }
   background: #2e8b57;
   color: #000;
 }
-
 </style>
 
 <script>
@@ -193,7 +285,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const comparer = (index, asc) => (a, b) => {
     const v1 = getCellValue(asc ? a : b, index);
     const v2 = getCellValue(asc ? b : a, index);
-    return !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.localeCompare(v2);
+    const n1 = parseFloat(v1), n2 = parseFloat(v2);
+    if (!isNaN(n1) && !isNaN(n2)) return n1 - n2;
+    return v1.localeCompare(v2);
   };
 
   document.querySelectorAll("#shopTable th.sortable").forEach((th, idx) =>
